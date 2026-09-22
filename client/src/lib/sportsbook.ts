@@ -1078,7 +1078,7 @@ export async function fetchAdminMatches(): Promise<EnrichedMatch[]> {
       return { ...m, sport: normalizeSportKey(m.sport), oddsMap, isAdmin: true } as EnrichedMatch;
     })
   );
-  return filterVisibleAdminMatches(ensureOdds(withOdds));
+  return filterVisibleAdminMatches(resolveDisplayLogos(ensureOdds(withOdds)));
 }
 
 // ---------------------------------------------------------------------------
