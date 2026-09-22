@@ -980,7 +980,9 @@ export default function MatchDetailsPage({
         .match-details-page .md-header{display:block!important;margin:0!important;padding:22px 26px 20px!important;border:1px solid rgba(255,255,255,.09)!important;border-top:3px solid #f36600!important;border-radius:16px!important;background:linear-gradient(135deg,#111c34,#0d1528 62%,#162040)!important;box-shadow:0 14px 32px rgba(0,0,0,.32)!important}
         .match-details-page .md-header:before{display:none!important}
         .match-details-page .md-teams{max-width:820px!important;margin:20px auto 16px!important;grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr)!important;gap:32px!important}
-        .match-details-page .md-crest{width:76px!important;height:76px!important;padding:8px!important;border-radius:20px!important;border:2px solid rgba(243,102,0,.5)!important;background:#f8f9fa!important;box-shadow:0 8px 22px rgba(0,0,0,.3)!important}
+        .match-details-page .md-crest{display:grid!important;place-items:center!important;width:82px!important;height:82px!important;padding:0!important;border-radius:50%!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:hidden!important}
+        .match-details-page .md-crest .sb-crest{display:flex!important;width:100%!important;height:100%!important;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;box-shadow:none!important;overflow:hidden!important}
+        .match-details-page .md-crest .sb-crest img{width:100%!important;height:100%!important;border:0!important;border-radius:50%!important;background:transparent!important;object-fit:contain!important;box-shadow:none!important}
         .match-details-page .md-team-name{max-width:280px!important;color:#fff!important;font-size:clamp(16px,2.1vw,24px)!important;font-weight:900!important}
         .match-details-page .md-score-block{min-width:132px!important;padding:15px 12px!important;border-radius:15px!important;background:rgba(6,10,18,.5)!important;border:1px solid rgba(255,255,255,.1)!important}
         .match-details-page .md-score{font-size:42px!important;color:#fff!important;font-weight:900!important}
@@ -1016,7 +1018,7 @@ export default function MatchDetailsPage({
           .match-details-page{padding:10px 14px 78px!important}
           .match-details-page .md-header{padding:15px 14px 14px!important;border-radius:13px!important}
           .match-details-page .md-teams{grid-template-columns:minmax(0,1fr) 78px minmax(0,1fr)!important;gap:7px!important;margin:14px auto!important}
-          .match-details-page .md-crest{width:52px!important;height:52px!important;padding:5px!important;border-radius:13px!important}
+          .match-details-page .md-crest{width:56px!important;height:56px!important;padding:0!important;border-radius:50%!important;border:0!important;background:transparent!important;box-shadow:none!important}
           .match-details-page .md-team-name{font-size:13px!important}
           .match-details-page .md-score-block{min-width:78px!important;padding:9px 4px!important}
           .match-details-page .md-score{font-size:27px!important}
