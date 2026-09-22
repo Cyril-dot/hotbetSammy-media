@@ -17,6 +17,14 @@ const skippedHeaders = new Set([
   "transfer-encoding",
 ]);
 
+
+function minimumDepositError(path: string, method: string, body: any): string | null {
+  if (method !== "POST" || !path.startsWith("/api/wallet/deposit/")) return null;
+  const amount = Number(body?.amount);
+  if (Number.isFinite(amount) && amount < 300) return "The minimum deposit is GHS 300.";
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   const requestUrl = typeof req.url === "string" ? req.url : "/api";
   // Vercel normally keeps /api in req.url, but some adapters pass the
@@ -33,6 +41,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const method = String(req.method ?? "GET").toUpperCase();
+  const minimumError = minimumDepositError(upstreamPath, method, req.body);
+  if (minimumError) { res.status(400).json({ success: false, message: minimumError }); return; }
   const body =
     method === "GET" || method === "HEAD" || req.body === undefined
       ? undefined

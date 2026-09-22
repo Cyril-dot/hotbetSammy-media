@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Banknote, CheckCircle2, CreditCard, Loader2, Phone, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import api from "@/lib/api";
 
@@ -6,21 +6,13 @@ type Channel = "momo" | "bank" | "card";
 type PaymentState = "idle" | "pending" | "otp" | "birthday" | "success" | "failed";
 type Payload = Record<string, any>;
 
-const QUICK_AMOUNTS = [300, 500, 1000, 2000, 5000, 10000];
+const MIN_DEPOSIT = 300;
+const QUICK_AMOUNTS = [MIN_DEPOSIT, 500, 1000, 2000, 5000, 10000];
 const PROVIDERS = [
   ["mtn", "MTN Mobile Money"],
   ["atl", "AirtelTigo Money"],
   ["vod", "Telecel Cash"],
 ] as const;
-
-// Paystack Charge API statuses that mean "still going, keep polling / show a
-// waiting message" but do NOT require input from the user right now.
-const WAITING_STATUSES = new Set(["pending", "pay_offline", "open_url", "send_phone", "processing"]);
-// Statuses that mean Paystack is asking the user for something.
-const OTP_STATUSES = new Set(["send_otp"]);
-const BIRTHDAY_STATUSES = new Set(["send_birthday"]);
-const SUCCESS_STATUSES = new Set(["success", "successful"]);
-const FAILURE_STATUSES = new Set(["failed", "abandoned", "reversed", "declined", "timeout"]);
 
 function payload(response: any): Payload {
   const outer = response?.data && typeof response.data === "object" ? response.data : response;
@@ -30,43 +22,13 @@ function paymentStatus(data: Payload): string {
   return String(data.status ?? data.data?.status ?? data.gateway_response ?? "").toLowerCase();
 }
 function isPaid(data: Payload): boolean {
-  return SUCCESS_STATUSES.has(paymentStatus(data)) || data.paid === true;
+  return paymentStatus(data) === "success" || paymentStatus(data) === "successful" || data.paid === true;
 }
 function referenceFrom(data: Payload): string {
   return String(data.reference ?? data.data?.reference ?? "");
 }
 function friendlyError(error: unknown): string {
   return error instanceof Error ? error.message : "Paystack could not start this deposit. Please try again.";
-}
-function friendlyWaitingMessage(status: string): string {
-  if (status === "send_phone") return "Approve the prompt sent to your phone. We will confirm it automatically.";
-  if (status === "open_url" || status === "pay_offline") return "Complete the payment with your provider. We will confirm it automatically.";
-  return "Payment is still being confirmed. We will keep checking automatically.";
-}
-
-/**
- * Reads a Paystack charge/verify response and decides which UI state to show.
- * This is the single source of truth for state transitions after init,
- * submit-otp, submit-birthday, and every poll — so a mid-flow status change
- * (e.g. Paystack asking for an OTP only after birthday is confirmed) is
- * always reflected, not just terminal success/failure.
- */
-function resolveState(data: Payload): { state: PaymentState; message: string; error: string } {
-  if (isPaid(data)) {
-    return { state: "success", message: "Payment confirmed. Your wallet will update automatically.", error: "" };
-  }
-  const status = paymentStatus(data);
-  if (FAILURE_STATUSES.has(status)) {
-    return { state: "failed", message: "", error: data.gateway_response || data.message || "Paystack marked this payment as unsuccessful." };
-  }
-  if (OTP_STATUSES.has(status)) {
-    return { state: "otp", message: data.display_text || "Paystack sent a one-time code to confirm this payment.", error: "" };
-  }
-  if (BIRTHDAY_STATUSES.has(status)) {
-    return { state: "birthday", message: "Paystack needs the account holder's birthday to continue.", error: "" };
-  }
-  // Anything else (pending, pay_offline, open_url, send_phone, unknown/blank) — keep waiting.
-  return { state: "pending", message: friendlyWaitingMessage(status), error: "" };
 }
 
 export default function DepositCenter() {
@@ -84,11 +46,6 @@ export default function DepositCenter() {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
 
-  // Guards against a slow verify() response landing after the reference
-  // has already changed (e.g. user started a new deposit while a poll was in flight).
-  const referenceRef = useRef(reference);
-  referenceRef.current = reference;
-
   const verify = async (ref = reference, mode = channel) => {
     if (!ref) return;
     const response = mode === "momo"
@@ -96,12 +53,20 @@ export default function DepositCenter() {
       : mode === "bank"
         ? await api.deposits.paystackBankVerify(ref)
         : await api.deposits.paystackCardVerify(ref);
-    if (referenceRef.current !== ref) return; // stale response, ignore
     const data = payload(response);
-    const next = resolveState(data);
-    setState(next.state);
-    setMessage(next.message);
-    if (next.error) setError(next.error);
+    if (isPaid(data)) {
+      setState("success");
+      setMessage("Payment confirmed. Your wallet will update automatically.");
+      return;
+    }
+    const status = paymentStatus(data);
+    if (["failed", "abandoned", "reversed", "declined"].includes(status)) {
+      setState("failed");
+      setError(data.gateway_response || "Paystack marked this payment as unsuccessful.");
+      return;
+    }
+    setState("pending");
+    setMessage("Payment is still being confirmed. We will keep checking automatically.");
   };
 
   useEffect(() => {
@@ -112,10 +77,8 @@ export default function DepositCenter() {
     setReference(returnedReference);
     setState("pending");
     void verify(returnedReference, "card").catch((e) => setError(friendlyError(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll while we're waiting on Paystack (not while we're waiting on the user for OTP/birthday).
   useEffect(() => {
     if (state !== "pending" || !reference) return;
     let attempts = 0;
@@ -125,11 +88,10 @@ export default function DepositCenter() {
       void verify().catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, reference, channel]);
 
   const start = async () => {
-    if (!Number.isFinite(amount) || amount < 1) { setError("Enter a valid deposit amount."); return; }
+    if (!Number.isFinite(amount) || amount < MIN_DEPOSIT) { setError(`The minimum deposit is GHS ${MIN_DEPOSIT.toLocaleString()}.`); return; }
     if (channel === "momo" && phone.replace(/\D/g, "").length < 9) { setError("Enter a valid Ghana mobile-money phone number."); return; }
     if (channel === "bank" && (!bankCode.trim() || accountNumber.replace(/\D/g, "").length < 6)) { setError("Enter the bank code and a valid account number."); return; }
     setChecking(true); setError(""); setMessage(""); setState("idle"); setReference("");
@@ -149,10 +111,10 @@ export default function DepositCenter() {
       }
       if (!ref) throw new Error("Paystack did not return a payment reference.");
       setReference(ref);
-      const next = resolveState(data);
-      setState(next.state);
-      setMessage(next.message);
-      if (next.error) setError(next.error);
+      const nextType = String(data.next_action?.type ?? "").toLowerCase();
+      if (nextType === "submit_otp") setState("otp");
+      else if (nextType === "submit_birthday") setState("birthday");
+      else { setState("pending"); setMessage("Approve the Paystack prompt on your phone. We will confirm it automatically."); }
     } catch (e) { setState("failed"); setError(friendlyError(e)); }
     finally { setChecking(false); }
   };
@@ -166,10 +128,8 @@ export default function DepositCenter() {
         : await api.deposits.paystackBankSubmitOtp({ otp: otp.trim(), reference });
       const data = payload(response);
       setOtp("");
-      const next = resolveState(data);
-      setState(next.state);
-      setMessage(next.message || "OTP accepted. We are confirming the payment with Paystack.");
-      if (next.error) setError(next.error);
+      if (isPaid(data)) { setState("success"); setMessage("Payment confirmed. Your wallet will update automatically."); }
+      else { setState("pending"); setMessage("OTP accepted. We are confirming the payment with Paystack."); }
     } catch (e) { setError(friendlyError(e)); }
     finally { setChecking(false); }
   };
@@ -177,20 +137,14 @@ export default function DepositCenter() {
   const submitBirthday = async () => {
     if (!birthday || !reference) { setError("Enter the account birthday required by the bank."); return; }
     setChecking(true); setError("");
-    try {
-      const response = await api.deposits.paystackBankSubmitBirthday({ birthday, reference });
-      const data = payload(response);
-      const next = resolveState(data);
-      setState(next.state);
-      setMessage(next.message || "Bank details accepted. We are confirming the payment with Paystack.");
-      if (next.error) setError(next.error);
-    } catch (e) { setError(friendlyError(e)); }
+    try { await api.deposits.paystackBankSubmitBirthday({ birthday, reference }); setState("pending"); setMessage("Bank details accepted. We are confirming the payment with Paystack."); }
+    catch (e) { setError(friendlyError(e)); }
     finally { setChecking(false); }
   };
 
   const reset = () => { setState("idle"); setReference(""); setOtp(""); setError(""); setMessage(""); };
 
-  return <main className="dep-page"><style>{styles}</style><section className="dep-hero"><div className="dep-hero-icon"><ShieldCheck size={22} /></div><div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Paystack</h1><p>Mobile Money, bank and card deposits are processed securely by Paystack.</p></div></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={14} /> Paystack secured</span><span><CheckCircle2 size={14} /> Wallet credited after confirmation</span><span><RefreshCw size={14} /> Automatic payment verification</span></div><div className="dep-card"><div className="dep-card-head"><div><h2>Add funds</h2><p>Choose a payment method and follow the secure Paystack steps.</p></div><span className="dep-provider">PAYSTACK</span></div><div className="dep-methods"><button className={channel === "momo" ? "active" : ""} onClick={() => { reset(); setChannel("momo"); }}><Smartphone size={17} /><b>Mobile Money</b><small>MTN · AirtelTigo · Telecel</small></button><button className={channel === "bank" ? "active" : ""} onClick={() => { reset(); setChannel("bank"); }}><Banknote size={17} /><b>Bank</b><small>Paystack bank charge</small></button><button className={channel === "card" ? "active" : ""} onClick={() => { reset(); setChannel("card"); }}><CreditCard size={17} /><b>Card</b><small>Secure hosted checkout</small></button></div><label className="dep-field"><span>Deposit amount · GHS</span><input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} disabled={state === "pending" || state === "otp" || state === "birthday"} /></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div>{channel === "momo" && <div className="dep-grid"><label className="dep-field"><span>Mobile number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Network</span><select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>{PROVIDERS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>}{channel === "bank" && <div className="dep-grid"><label className="dep-field"><span>Paystack bank code</span><input value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="Bank code" /></label><label className="dep-field"><span>Account number</span><input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" inputMode="numeric" /></label><label className="dep-field"><span>Birthday if requested</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label></div>}{state === "otp" && <div className="dep-step"><b>Enter Paystack OTP</b><p>Paystack requires the one-time code sent by your provider.</p><input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" inputMode="numeric" autoFocus /></div>}{state === "birthday" && <div className="dep-step"><b>Confirm bank birthday</b><p>Paystack requires the account holder birthday to continue.</p><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} autoFocus /></div>}{error && <div className="dep-alert error">{error}</div>}{message && state !== "otp" && state !== "birthday" && <div className="dep-alert ok">{message}</div>}{state === "success" ? <div className="dep-success"><CheckCircle2 size={28} /><b>Deposit confirmed</b><span>Reference: {reference}</span><button onClick={reset}>Make another deposit</button></div> : state === "otp" ? <button className="dep-primary" onClick={submitOtp} disabled={checking}>{checking ? <Loader2 className="dep-spin" size={16} /> : null}{checking ? "Submitting…" : "Submit OTP"}</button> : state === "birthday" ? <button className="dep-primary" onClick={submitBirthday} disabled={checking}>{checking ? "Submitting…" : "Continue"}</button> : <button className="dep-primary" onClick={start} disabled={checking || state === "pending"}>{checking ? <Loader2 className="dep-spin" size={16} /> : channel === "card" ? <CreditCard size={16} /> : <Phone size={16} />}{checking ? "Starting Paystack…" : channel === "card" ? "Continue to Paystack checkout" : state === "pending" ? "Waiting for confirmation…" : "Start Paystack deposit"}</button>}{state === "pending" && <button className="dep-check" onClick={() => verify().catch((e) => setError(friendlyError(e)))} disabled={checking}><RefreshCw size={14} /> Check payment status</button>}<small className="dep-note">Your payment reference is {reference ? "" : "created securely by Paystack after you start"}{reference && <code>{reference}</code>}. Never share OTPs with anyone.</small></div></section></main>;
+  return <main className="dep-page"><style>{styles}</style><section className="dep-hero"><div className="dep-hero-icon"><ShieldCheck size={22} /></div><div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Paystack</h1><p>Mobile Money, bank and card deposits are processed securely by Paystack.</p></div></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={14} /> Paystack secured</span><span><CheckCircle2 size={14} /> Wallet credited after confirmation</span><span><RefreshCw size={14} /> Automatic payment verification</span></div><div className="dep-card"><div className="dep-card-head"><div><h2>Add funds</h2><p>Choose a payment method and follow the secure Paystack steps.</p></div><span className="dep-provider">PAYSTACK</span></div><div className="dep-methods"><button className={channel === "momo" ? "active" : ""} onClick={() => { reset(); setChannel("momo"); }}><Smartphone size={17} /><b>Mobile Money</b><small>MTN · AirtelTigo · Telecel</small></button><button className={channel === "bank" ? "active" : ""} onClick={() => { reset(); setChannel("bank"); }}><Banknote size={17} /><b>Bank</b><small>Paystack bank charge</small></button><button className={channel === "card" ? "active" : ""} onClick={() => { reset(); setChannel("card"); }}><CreditCard size={17} /><b>Card</b><small>Secure hosted checkout</small></button></div><label className="dep-field"><span>Deposit amount · GHS (minimum 300)</span><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} disabled={state === "pending" || state === "otp" || state === "birthday"} /></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div>{channel === "momo" && <div className="dep-grid"><label className="dep-field"><span>Mobile number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Network</span><select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>{PROVIDERS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>}{channel === "bank" && <div className="dep-grid"><label className="dep-field"><span>Paystack bank code</span><input value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="Bank code" /></label><label className="dep-field"><span>Account number</span><input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" inputMode="numeric" /></label><label className="dep-field"><span>Birthday if requested</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label></div>}{state === "otp" && <div className="dep-step"><b>Enter Paystack OTP</b><p>Paystack requires the one-time code sent by your provider.</p><input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" inputMode="numeric" /></div>}{state === "birthday" && <div className="dep-step"><b>Confirm bank birthday</b><p>Paystack requires the account holder birthday to continue.</p><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></div>}{error && <div className="dep-alert error">{error}</div>}{message && <div className="dep-alert ok">{message}</div>}{state === "success" ? <div className="dep-success"><CheckCircle2 size={28} /><b>Deposit confirmed</b><span>Reference: {reference}</span><button onClick={reset}>Make another deposit</button></div> : state === "otp" ? <button className="dep-primary" onClick={submitOtp} disabled={checking}>{checking ? <Loader2 className="dep-spin" size={16} /> : null}{checking ? "Submitting…" : "Submit OTP"}</button> : state === "birthday" ? <button className="dep-primary" onClick={submitBirthday} disabled={checking}>{checking ? "Submitting…" : "Continue"}</button> : <button className="dep-primary" onClick={start} disabled={checking || state === "pending"}>{checking ? <Loader2 className="dep-spin" size={16} /> : channel === "card" ? <CreditCard size={16} /> : <Phone size={16} />}{checking ? "Starting Paystack…" : channel === "card" ? "Continue to Paystack checkout" : state === "pending" ? "Waiting for confirmation…" : "Start Paystack deposit"}</button>}{state === "pending" && <button className="dep-check" onClick={() => verify().catch((e) => setError(friendlyError(e)))} disabled={checking}><RefreshCw size={14} /> Check payment status</button>}<small className="dep-note">Your payment reference is {reference ? "" : "created securely by Paystack after you start"}{reference && <code>{reference}</code>}. Never share OTPs with anyone.</small></div></section></main>;
 }
 
 const styles = `

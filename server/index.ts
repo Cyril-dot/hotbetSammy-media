@@ -19,6 +19,12 @@ const proxyHeadersToSkip = new Set([
   "referer",
   "transfer-encoding",
 ]);
+function minimumDepositError(path: string, method: string, body: any): string | null {
+  if (method !== "POST" || !path.startsWith("/api/wallet/deposit/")) return null;
+  const amount = Number(body?.amount);
+  if (Number.isFinite(amount) && amount < 300) return "The minimum deposit is GHS 300.";
+  return null;
+}
 
 async function startServer() {
   const app = express();
@@ -28,6 +34,8 @@ async function startServer() {
   // avoids the Railway API rejecting the deployed site's CORS preflight.
   app.use(express.json({ limit: "2mb" }));
   app.use("/api", async (req, res) => {
+    const minimumError = minimumDepositError(req.originalUrl, req.method, req.body);
+    if (minimumError) { res.status(400).json({ success: false, message: minimumError }); return; }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
 

@@ -3206,6 +3206,9 @@ export const superAdmin = {
   /** POST /api/super-admin/admins */
   createAdmin: (body: Record<string, string>) =>
     http.post<ApiResponse<User>>("/api/super-admin/admins", body),
+  /** POST /api/super-admin/admins/with-commission */
+  createAdminWithCommission: (body: { email: string; password: string; firstName: string; lastName?: string; commissionRate: string }) =>
+    http.post<ApiResponse<User>>("/api/super-admin/admins/with-commission", body),
 
   setAdminCommissionRate: (adminId: string, body: { commissionRate: number }) =>
     http.patch<ApiResponse<User>>(`/api/super-admin/admins/${adminId}/commission-rate`, body),
