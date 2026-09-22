@@ -348,13 +348,13 @@ function resolveDisplayLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
 async function waitForAdminLogos(matches: EnrichedMatch[]): Promise<EnrichedMatch[]> {
   if (typeof window === "undefined") return matches;
   const preload = (url?: string) => new Promise<boolean>((resolve) => {
-    if (!url) { resolve(false); return; }
+    if (!url) { console.error("[AdminLogo] missing assigned path in sportsbook gate"); resolve(false); return; }
     const image = new window.Image();
     let settled = false;
     const finish = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
-    image.onload = () => finish(true);
-    image.onerror = () => finish(false);
-    window.setTimeout(() => finish(false), 5000);
+    image.onload = () => { console.info("[AdminLogo] sportsbook preload success", { path: url }); finish(true); };
+    image.onerror = () => { console.error("[AdminLogo] sportsbook preload failed", { path: url }); finish(false); };
+    window.setTimeout(() => { console.error("[AdminLogo] sportsbook preload timeout", { path: url }); finish(false); }, 5000);
     image.src = url;
   });
   const checked = await Promise.all(matches.map(async (match) => {
@@ -362,6 +362,8 @@ async function waitForAdminLogos(matches: EnrichedMatch[]): Promise<EnrichedMatc
     const [homeReady, awayReady] = await Promise.all([preload(match.displayHomeLogo), preload(match.displayAwayLogo)]);
     return { match, ready: homeReady && awayReady };
   }));
+  const hidden = checked.filter((item) => !item.ready);
+  hidden.forEach((item) => console.warn("[AdminLogo] sportsbook match hidden", { matchId: item.match.id, home: item.match.displayHomeLogo, away: item.match.displayAwayLogo }));
   return checked.filter((item) => item.ready).map((item) => item.match);
 }
 

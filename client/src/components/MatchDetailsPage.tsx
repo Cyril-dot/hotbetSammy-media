@@ -86,17 +86,17 @@ async function requireAdminLogos(match: Match): Promise<Match> {
   const assigned = assignAdminLogos(match) as Match & { homeLogo?: string; awayLogo?: string };
   if (typeof window === "undefined") return assigned;
   const load = (src?: string) => new Promise<boolean>((resolve) => {
-    if (!src) { resolve(false); return; }
+    if (!src) { console.error("[AdminLogo] details page missing assigned path", { matchId: match.id }); resolve(false); return; }
     const image = new window.Image();
     let settled = false;
     const finish = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
-    image.onload = () => finish(true);
-    image.onerror = () => finish(false);
-    window.setTimeout(() => finish(false), 5000);
+    image.onload = () => { console.info("[AdminLogo] details preload success", { matchId: match.id, path: src }); finish(true); };
+    image.onerror = () => { console.error("[AdminLogo] details preload failed", { matchId: match.id, path: src }); finish(false); };
+    window.setTimeout(() => { console.error("[AdminLogo] details preload timeout", { matchId: match.id, path: src }); finish(false); }, 5000);
     image.src = src;
   });
   const [homeReady, awayReady] = await Promise.all([load(assigned.homeLogo), load(assigned.awayLogo)]);
-  if (!homeReady || !awayReady) throw new Error("Admin match logos could not be loaded.");
+  if (!homeReady || !awayReady) { console.warn("[AdminLogo] details match hidden", { matchId: match.id, home: assigned.homeLogo, away: assigned.awayLogo }); throw new Error("Admin match logos could not be loaded."); }
   return assigned;
 }
 

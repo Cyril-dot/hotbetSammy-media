@@ -23,5 +23,11 @@ export function adminCrestFor(team: unknown, side: "home" | "away", salt = ""): 
 export function assignAdminLogos<T extends { homeTeam?: unknown; awayTeam?: unknown }>(match: T) {
   const homeLogo = adminCrestFor(match.homeTeam, "home");
   const awayLogo = adminCrestFor(match.awayTeam, "away");
+  if (typeof console !== "undefined") {
+    console.info("[AdminLogo] assigned", {
+      homeTeam: String(match.homeTeam ?? ""), homeLogo,
+      awayTeam: String(match.awayTeam ?? ""), awayLogo,
+    });
+  }
   return { ...match, homeLogo, awayLogo, displayHomeLogo: homeLogo, displayAwayLogo: awayLogo };
 }

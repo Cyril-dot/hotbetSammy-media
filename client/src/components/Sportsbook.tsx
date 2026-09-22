@@ -99,8 +99,8 @@ export function TeamCrest({ url, name }: { url?: string; name: string }) {
   const [src, setSrc] = useState(url || fallback);
   useEffect(() => { setSrc(url || fallback); }, [url, fallback]);
   return (
-    <span className="sb-crest" aria-hidden>
-      <img src={src} alt="" loading="lazy" decoding="async" draggable={false} referrerPolicy="no-referrer" onError={() => { if (src !== fallback) setSrc(fallback); }} />
+    <span className="sb-crest" data-logo-path={src} title={`${name} logo: ${src}`}>
+      <img src={src} alt={`${name} logo`} aria-label={`${name} logo`} data-logo-path={src} loading="lazy" decoding="async" draggable={false} referrerPolicy="no-referrer" onLoad={() => console.info("[AdminLogo] rendered", { name, path: src })} onError={() => { console.error("[AdminLogo] render failed", { name, path: src, fallback }); if (src !== fallback) setSrc(fallback); }} />
     </span>
   );
 }
@@ -118,17 +118,17 @@ function MatchRow({
     let active = true;
     setHomeReady(false); setAwayReady(false); setLogoBlocked(false);
     const preload = (src: string | undefined, ready: (value: boolean) => void) => {
-      if (!src) { ready(false); return; }
+      if (!src) { console.error("[AdminLogo] missing assigned path", { matchId: match.id }); ready(false); return; }
       const image = new Image();
-      image.onload = () => { if (active) ready(true); };
-      image.onerror = () => { if (active) { setLogoBlocked(true); ready(false); } };
+      image.onload = () => { console.info("[AdminLogo] preload success", { matchId: match.id, path: src }); if (active) ready(true); };
+      image.onerror = () => { console.error("[AdminLogo] preload failed; hiding match", { matchId: match.id, path: src }); if (active) { setLogoBlocked(true); ready(false); } };
       image.src = src;
     };
     preload(adminHomeLogo, setHomeReady);
     preload(adminAwayLogo, setAwayReady);
     return () => { active = false; };
   }, [isAdmin, adminHomeLogo, adminAwayLogo]);
-  if (isAdmin && (logoBlocked || !homeReady || !awayReady)) return null;
+  if (isAdmin && (logoBlocked || !homeReady || !awayReady)) { if (logoBlocked) console.warn("[AdminLogo] match hidden", { matchId: match.id, home: adminHomeLogo, away: adminAwayLogo }); return null; }
   const isLive = !ended && isMatchLive(match);
   // Live prices are valid bet selections too. Only finished matches and
   // synthetic/estimated prices must stay out of the slip.
