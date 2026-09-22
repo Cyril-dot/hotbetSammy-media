@@ -11,7 +11,7 @@
 // through AkwaPay (Flutterwave v4 gateway). Unlike RushPay's browser-direct
 // widget sessions, EVERY AkwaPay call is same-origin through our own backend —
 // there are no browser-direct gateway requests left in this client.
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "https://futballbackend-production-0894.up.railway.app").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -2944,7 +2944,7 @@ export const adminMatches = {
     http.patch<ApiResponse<Match>>(`/api/admin/matches/${id}/score`, body),
 
   createAuto: (payload: Record<string, unknown>) =>
-    http.post<ApiResponse<Match>>('/api/admin/matches/auto', payload),
+    http.post<ApiResponse<Match>>('/admin/matches/auto', payload),
 };
 
 export interface AutoMatchScheduleRequest {
@@ -2957,9 +2957,9 @@ export interface AutoMatchSchedule {
   finishAt?: string; goals?: Record<string, unknown>[]; [key: string]: unknown;
 }
 export const adminMatchSchedule = {
-  create: (body: AutoMatchScheduleRequest) => http.post<ApiResponse<Match>>("/api/admin/matches/auto", body),
-  getSchedule: (matchId: string) => http.get<ApiResponse<AutoMatchSchedule>>(`/api/admin/matches/auto/${matchId}`),
-  cancel: (matchId: string) => http.delete<{ matchId: string; jobsCancelled: number }>(`/api/admin/matches/auto/${matchId}`),
+  create: (body: AutoMatchScheduleRequest) => http.post<ApiResponse<Match>>("/admin/matches/auto", body),
+  getSchedule: (matchId: string) => http.get<ApiResponse<AutoMatchSchedule>>(`/admin/matches/auto/${matchId}`),
+  cancel: (matchId: string) => http.delete<{ matchId: string; jobsCancelled: number }>(`/admin/matches/auto/${matchId}`),
 };
 
 // =============================================================================
