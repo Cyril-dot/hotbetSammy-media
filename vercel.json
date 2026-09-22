@@ -5,7 +5,7 @@
   "routes": [
     {
       "src": "^/api/(.*)$",
-      "dest": "https://futballbackend-production-0894.up.railway.app/api/$1"
+      "dest": "https://futballbackend-production-ee88.up.railway.app/api/$1"
     },
     {
       "src": "^/admin(?:/.*)?$",

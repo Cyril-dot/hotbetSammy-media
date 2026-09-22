@@ -11,7 +11,7 @@
 // through AkwaPay (Flutterwave v4 gateway). Unlike RushPay's browser-direct
 // widget sessions, EVERY AkwaPay call is same-origin through our own backend —
 // there are no browser-direct gateway requests left in this client.
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "https://futballbackend-production-0894.up.railway.app").replace(/\/+$/, "");
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "https://futballbackend-production-ee88.up.railway.app").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   status: number;

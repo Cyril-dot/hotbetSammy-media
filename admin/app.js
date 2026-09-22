@@ -18,7 +18,7 @@
 // ==================== CONFIG ====================
 const BASE_URL = 'https://futballbackend-production-f14d.up.railway.app';
 // Alternate backend kept for reference:
-// const BASE_URL = 'https://futballbackend-production-0894.up.railway.app';
+// const BASE_URL = 'https://futballbackend-production-ee88.up.railway.app';
 
 let config = { baseUrl: BASE_URL, token: '' };
 
