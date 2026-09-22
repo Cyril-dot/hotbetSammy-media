@@ -3212,8 +3212,9 @@ export const superAdmin = {
 
   setAdminCommissionRate: (adminId: string, body: { commissionRate: number }) =>
     http.patch<ApiResponse<User>>(`/api/super-admin/admins/${adminId}/commission-rate`, body),
-  addFundsToAdmin: (adminId: string, body: { amount: number; currency: string; reason?: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>(`/api/super-admin/admins/${adminId}/funds`, body),
+  /** POST /api/super-admin/admins/:adminId/add-funds */
+  addFundsToAdmin: (adminId: string, body: { amount: string; reason?: string }) =>
+    http.post<ApiResponse<Record<string, unknown>>>(`/api/super-admin/admins/${encodeURIComponent(adminId)}/add-funds`, body),
 
   /** GET /api/super-admin/admins/:adminId */
   getAdminDetail: (adminId: string) =>
