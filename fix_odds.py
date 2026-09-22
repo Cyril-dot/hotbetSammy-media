@@ -1,0 +1,13 @@
+from pathlib import Path
+p = Path('/home/ubuntu/nexbet-black-gold/client/src/App.tsx')
+s = p.read_text()
+s = s.replace('function Odds({ pick, onPick }: { pick: Pick; onPick: (p: Pick)=>void }) { return <button className="odd" onClick={()=>onPick(pick)}>', 'function Odds({ pick, onPick, selected }: { pick: Pick; onPick: (p: Pick)=>void; selected?: boolean }) { return <button className={`odd${selected ? " selected" : ""}`} aria-pressed={selected} onClick={()=>onPick(pick)}>')
+s = s.replace('function MatchTable({ onPick }: { onPick: (p: Pick)=>void }){', 'function MatchTable({ onPick, picks }: { onPick: (p: Pick)=>void; picks: Pick[] }){')
+s = s.replace('function LiveSection({ onPick }: { onPick: (p: Pick)=>void }){', 'function LiveSection({ onPick, picks }: { onPick: (p: Pick)=>void; picks: Pick[] }){')
+s = s.replace('<Odds onPick={onPick} pick={{id:m.id, match:', '<Odds selected={picks.some(x=>x.id===m.id&&x.selection==="1")} onPick={onPick} pick={{id:m.id, match:', 1)
+s = s.replace('<Odds onPick={onPick} pick={{id:m.id,match:', '<Odds selected={picks.some(x=>x.id===m.id&&x.selection==="X")} onPick={onPick} pick={{id:m.id,match:', 1)
+s = s.replace('<Odds onPick={onPick} pick={{id:m.id,match:', '<Odds selected={picks.some(x=>x.id===m.id&&x.selection==="2")} onPick={onPick} pick={{id:m.id,match:', 1)
+s = s.replace('<Odds onPick={onPick} key={odd} pick={{id:`live-${i}-${j}`', '<Odds selected={picks.some(x=>x.id===`live-${i}-${j}`&&x.selection===["1","X","2"][j])} onPick={onPick} key={odd} pick={{id:`live-${i}-${j}`')
+s = s.replace('<MatchTable onPick={onPick}/><LiveSection onPick={onPick}/>', '<MatchTable onPick={onPick} picks={picks}/><LiveSection onPick={onPick} picks={picks}/>')
+s = s.replace('<LiveSection onPick={onPick}/><section className="panel simple-card live-rail">', '<LiveSection onPick={onPick} picks={picks}/><section className="panel simple-card live-rail">')
+p.write_text(s)

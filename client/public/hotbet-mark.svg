@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HotBet flame and ball mark">
+  <defs>
+    <linearGradient id="hotbetOrange" x1="14" y1="7" x2="52" y2="57" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFAA52"/>
+      <stop offset="0.45" stop-color="#F36600"/>
+      <stop offset="1" stop-color="#C93D00"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#hotbetOrange)" d="M35.8 5.5c2.1 8.4-.7 14.2-5.5 19.4 7.8-1.7 13.2 1.4 16.8 7.3 2.2 3.5 3.3 7.3 3.3 11.3C50.4 53.2 41.5 61 31 61 19.2 61 10 52.6 10 41.2c0-12.1 8-23.2 25.8-35.7Z"/>
+  <circle cx="31" cy="40" r="13.8" fill="#121821" stroke="#fff" stroke-width="2.4"/>
+  <path fill="#fff" d="m31 29.3 3.6 4.8-1.4 5.1h-5.1l-1.5-5.1 4.4-4.8Zm-12.1 8.2 5.5-.2 3.1 4.2-2.5 4.4-5.4-1.7-1.4-6.7Zm24.2 0-5.5-.2-3.1 4.2 2.5 4.4 5.4-1.7 1.4-6.7ZM25.7 50l3.1-3.9h5.2l3.1 3.9-6.2 3.1-5.2-3.1Z"/>
+  <path fill="#F36600" d="m31 29.3 3.6 4.8-1.4 5.1h-5.1l-1.5-5.1 4.4-4.8Z"/>
+</svg>

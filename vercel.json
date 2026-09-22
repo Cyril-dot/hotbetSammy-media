@@ -1,0 +1,12 @@
+{
+  "buildCommand": "pnpm exec vite build",
+  "installCommand": "pnpm install",
+  "outputDirectory": "dist/public",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://futballbackend-production-ee88.up.railway.app/api/:path*"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
