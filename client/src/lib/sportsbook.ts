@@ -346,6 +346,29 @@ function resolveDisplayLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
   });
 }
 
+/** PowerBet-style gate: admin fixtures are not returned to the UI until both
+ * deterministic catalog crests have loaded successfully. This prevents a
+ * broken image slot from appearing on the homepage, sportsbook, or details. */
+async function waitForAdminLogos(matches: EnrichedMatch[]): Promise<EnrichedMatch[]> {
+  if (typeof window === "undefined") return matches;
+  const preload = (url?: string) => new Promise<boolean>((resolve) => {
+    if (!url) { resolve(false); return; }
+    const image = new window.Image();
+    let settled = false;
+    const finish = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
+    image.onload = () => finish(true);
+    image.onerror = () => finish(false);
+    window.setTimeout(() => finish(false), 5000);
+    image.src = url;
+  });
+  const checked = await Promise.all(matches.map(async (match) => {
+    if (!match.isAdmin) return { match, ready: true };
+    const [homeReady, awayReady] = await Promise.all([preload(match.displayHomeLogo), preload(match.displayAwayLogo)]);
+    return { match, ready: homeReady && awayReady };
+  }));
+  return checked.filter((item) => item.ready).map((item) => item.match);
+}
+
 function extractOddsMap(oddsArray: unknown[], homeTeam: string, awayTeam: string): OddsMap | undefined {
   if (!Array.isArray(oddsArray) || oddsArray.length === 0) return undefined;
   const pool = oddsArray as Array<Record<string, unknown>>;
@@ -1075,7 +1098,7 @@ export async function fetchAdminMatches(): Promise<EnrichedMatch[]> {
       return { ...m, sport: normalizeSportKey(m.sport), oddsMap, isAdmin: true } as EnrichedMatch;
     })
   );
-  return filterVisibleAdminMatches(resolveDisplayLogos(ensureOdds(withOdds)));
+  return waitForAdminLogos(filterVisibleAdminMatches(resolveDisplayLogos(ensureOdds(withOdds))));
 }
 
 // ---------------------------------------------------------------------------
@@ -1238,6 +1261,7 @@ export async function fetchMatchDetail(id: string, hintSport?: SportKey | "admin
         if (h2h) enriched.h2h = h2h.data;
       }
       const result = resolveDisplayLogos(ensureOdds([enriched]))[0];
+      if (result.isAdmin && (await waitForAdminLogos([result])).length === 0) return null;
       log(`attempt[${attempt.sport}]`, "resolved match", { resolvedSport, isAdmin: result.isAdmin, isSyntheticOdds: result.isSyntheticOdds });
       return result;
     } catch (err) {
@@ -1285,6 +1309,7 @@ export async function fetchMatchDetail(id: string, hintSport?: SportKey | "admin
       const h2h = await settleList(api.publicFootball.h2h(id));
       if (h2h) enriched.h2h = h2h.data;
       const result = resolveDisplayLogos(ensureOdds([enriched]))[0];
+      if (result.isAdmin && (await waitForAdminLogos([result])).length === 0) return null;
       log("football bulk-source lookup", "resolved match", { isSyntheticOdds: result.isSyntheticOdds });
       return result;
     } catch (err) {
