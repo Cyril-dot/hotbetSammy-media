@@ -68,7 +68,20 @@ async function fetchMatchById(id: string, sport: SportKind): Promise<Match> {
     case "baseball":   res = await api.publicBaseball.getById(id);   break;
     case "mma":        res = await api.publicMma.getById(id);        break;
     case "tennis":     res = await api.publicTennis.getById(id);     break;
-    case "admin":      res = await api.publicAdminMatches.getById(id); break;
+    case "admin": {
+      try {
+        res = await api.publicAdminMatches.getById(id);
+      } catch (error) {
+        console.warn("[AdminMatch] details endpoint failed; falling back to public admin list", { id, error });
+        const listResponse = await api.publicAdminMatches.getAll();
+        const list = Array.isArray(listResponse.data) ? listResponse.data : [];
+        const found = list.find((item) => String(item.id) === String(id));
+        if (!found) throw error;
+        console.info("[AdminMatch] resolved details from public admin list", { id });
+        return found;
+      }
+      break;
+    }
     default: {
       // Public links may contain the provider event ID (for example
       // /match/401922312?sport=football), while detail/odds routes expect the
