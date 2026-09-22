@@ -659,6 +659,9 @@ export interface AdminMatchRequest {
   kickoffAt?: string;
   status?: string;
   featured?: boolean;
+  scoreHome?: number;
+  scoreAway?: number;
+  source?: string;
 }
 
 export interface AdminStatusUpdateRequest {
