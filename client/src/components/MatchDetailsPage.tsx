@@ -831,7 +831,7 @@ export default function MatchDetailsPage({
           {/* Home team */}
           <div className="md-team">
             <div className="md-crest">
-              <TeamCrest url={match.homeLogo} name={match.homeTeam ?? ""} />
+              <TeamCrest url={match.homeLogo} name={match.homeTeam ?? ""} side="home" />
             </div>
             <div className="md-team-name">{match.homeTeam}</div>
           </div>
@@ -854,7 +854,7 @@ export default function MatchDetailsPage({
           {/* Away team */}
           <div className="md-team">
             <div className="md-crest">
-              <TeamCrest url={match.awayLogo} name={match.awayTeam ?? ""} />
+              <TeamCrest url={match.awayLogo} name={match.awayTeam ?? ""} side="away" />
             </div>
             <div className="md-team-name">{match.awayTeam}</div>
           </div>

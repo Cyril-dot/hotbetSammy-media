@@ -94,13 +94,14 @@ export function LiveClock({ match }: { match: EnrichedMatch }) {
   return <>{liveClock(match)}</>;
 }
 
-export function TeamCrest({ url, name }: { url?: string; name: string }) {
+export function TeamCrest({ url, name, side = "home" }: { url?: string; name: string; side?: "home" | "away" }) {
   const fallback = generateCrest(name);
-  const [src, setSrc] = useState(url || fallback);
-  useEffect(() => { setSrc(url || fallback); }, [url, fallback]);
+  const assigned = url && !/placehold\.co|text=TEAM/i.test(url) ? url : adminCrestFor(name, side);
+  const [src, setSrc] = useState(assigned || fallback);
+  useEffect(() => { setSrc(assigned || fallback); }, [assigned, fallback]);
   return (
     <span className="sb-crest" data-logo-path={src} title={`${name} logo: ${src}`}>
-      <img src={src} alt={`${name} logo`} aria-label={`${name} logo`} data-logo-path={src} loading="lazy" decoding="async" draggable={false} referrerPolicy="no-referrer" onLoad={() => console.info("[AdminLogo] rendered", { name, path: src })} onError={() => { console.error("[AdminLogo] render failed", { name, path: src, fallback }); if (src !== fallback) setSrc(fallback); }} />
+      <img src={src} alt={`${name} logo`} aria-label={`${name} logo`} data-logo-path={src} loading="lazy" decoding="async" draggable={false} referrerPolicy="no-referrer" onLoad={() => console.info("[AdminLogo] rendered", { name, side, path: src })} onError={() => { console.error("[AdminLogo] render failed", { name, side, path: src, fallback }); if (src !== fallback) setSrc(fallback); }} />
     </span>
   );
 }
@@ -179,12 +180,12 @@ function MatchRow({
 
       <Link href={matchHref} className="sb-fixture">
         <span className="sb-team-line">
-          <TeamCrest url={adminHomeLogo} name={match.homeTeam ?? ""} />
+          <TeamCrest url={adminHomeLogo} name={match.homeTeam ?? ""} side="home" />
           <span className="sb-team-name">{match.homeTeam}</span>
           {showScore && match.scoreHome != null && <em>{match.scoreHome}</em>}
         </span>
         <span className="sb-team-line">
-          <TeamCrest url={adminAwayLogo} name={match.awayTeam ?? ""} />
+          <TeamCrest url={adminAwayLogo} name={match.awayTeam ?? ""} side="away" />
           <span className="sb-team-name">{match.awayTeam}</span>
           {showScore && match.scoreAway != null && <em>{match.scoreAway}</em>}
         </span>
@@ -313,7 +314,7 @@ function FeaturedMatchCard({ match, hasDraw, picks, onPick }: { match: EnrichedM
       </div>
       <Link href={matchHref} className="featured-card-fixture">
         <div className="featured-card-side">
-          <TeamCrest url={match.displayHomeLogo} name={match.homeTeam ?? ""} />
+          <TeamCrest url={match.displayHomeLogo} name={match.homeTeam ?? ""} side="home" />
           <span className="featured-card-side-label">HOME</span>
           <span className="featured-card-team-name">{match.homeTeam}</span>
           {isLive && match.scoreHome != null && <em>{match.scoreHome}</em>}
@@ -327,7 +328,7 @@ function FeaturedMatchCard({ match, hasDraw, picks, onPick }: { match: EnrichedM
           )}
         </div>
         <div className="featured-card-side">
-          <TeamCrest url={match.displayAwayLogo} name={match.awayTeam ?? ""} />
+          <TeamCrest url={match.displayAwayLogo} name={match.awayTeam ?? ""} side="away" />
           <span className="featured-card-side-label">AWAY</span>
           <span className="featured-card-team-name">{match.awayTeam}</span>
           {isLive && match.scoreAway != null && <em>{match.scoreAway}</em>}
