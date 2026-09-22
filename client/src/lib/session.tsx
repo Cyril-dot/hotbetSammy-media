@@ -108,19 +108,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     setToken(t);
     if (!t) { setUser(null); setBalance(null); setChecked(true); return; }
-    Promise.allSettled([api.user.me(), api.wallet.getWallet()]).then(([userRes, walletRes]) => {
-      if (userRes.status === "fulfilled") {
-        setUser(userRes.value.data ?? userRes.value);
-        const hasName = pickUserField(userRes.value.data ?? userRes.value, "firstName", "first_name", "email", "emailAddress", "username");
-        if (!hasName) {
-          // eslint-disable-next-line no-console
-          console.warn("[session] Logged in, but no name/email field could be found on the user object. Raw response:", userRes.value);
+    Promise.allSettled([api.user.me(), api.wallet.getWallet()]).then(async ([userRes, walletRes]) => {
+      let resolvedUser = userRes;
+      if (userRes.status === "rejected" && userRes.reason instanceof ApiError && userRes.reason.status === 401) {
+        try {
+          const refreshed = await api.auth.refresh();
+          const nextToken = refreshed.data.accessToken;
+          window.localStorage.setItem("accessToken", nextToken);
+          window.localStorage.setItem("fb_token", nextToken);
+          setToken(nextToken);
+          resolvedUser = await Promise.allSettled([api.user.me()]).then(([result]) => result as typeof userRes);
+        } catch {
+          // Refresh failure means the session is genuinely invalid.
         }
-      } else if (userRes.reason instanceof ApiError && userRes.reason.status === 401) {
-        // Token is genuinely invalid/expired — clear it. A network error must NOT log the user out.
-        window.localStorage.removeItem("accessToken");
-        setToken(null);
-        setUser(null);
+      }
+      if (resolvedUser.status === "fulfilled") {
+        setUser(resolvedUser.value.data ?? resolvedUser.value);
+        const hasName = pickUserField(resolvedUser.value.data ?? resolvedUser.value, "firstName", "first_name", "email", "emailAddress", "username");
+        if (!hasName) console.warn("[session] Logged in, but no name/email field could be found on the user object. Raw response:", resolvedUser.value);
+      } else if (resolvedUser.reason instanceof ApiError && resolvedUser.reason.status === 401) {
+        window.localStorage.removeItem("accessToken"); window.localStorage.removeItem("fb_token"); setToken(null); setUser(null);
       }
       if (walletRes.status === "fulfilled") {
         const payload = (walletRes.value.data ?? walletRes.value) as Record<string, unknown>;

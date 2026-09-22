@@ -2947,7 +2947,7 @@ export const adminMatches = {
 export interface AutoMatchScheduleRequest {
   homeTeam: string; awayTeam: string; league?: string; sport?: string;
   homeLogo?: string; awayLogo?: string; leagueLogo?: string; featured?: boolean;
-  kickoffAt: string; finalScoreHome: number; finalScoreAway: number;
+  kickoffAt: string; finalScoreHome: number; finalScoreAway: number; scoreHome?: number; scoreAway?: number; source?: string; status?: string;
 }
 export interface AutoMatchSchedule {
   matchId?: string; kickoffAt?: string; halfTimeAt?: string; secondHalfAt?: string;
