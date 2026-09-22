@@ -19,3 +19,9 @@ export function adminCrestFor(team: unknown, side: "home" | "away", salt = ""): 
   const catalog = side === "home" ? HOME_ADMIN_CRESTS : AWAY_ADMIN_CRESTS;
   return catalog[hash % catalog.length];
 }
+
+export function assignAdminLogos<T extends { homeTeam?: unknown; awayTeam?: unknown }>(match: T) {
+  const homeLogo = adminCrestFor(match.homeTeam, "home");
+  const awayLogo = adminCrestFor(match.awayTeam, "away");
+  return { ...match, homeLogo, awayLogo, displayHomeLogo: homeLogo, displayAwayLogo: awayLogo };
+}

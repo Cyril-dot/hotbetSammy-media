@@ -11,6 +11,7 @@ import { useFavorites } from "@/lib/favorites";
 import type { Pick } from "./Sportsbook";
 import api from "@/lib/api";
 import type { Match } from "@/lib/api";
+import { assignAdminLogos } from "@/lib/logoCatalog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,7 +37,7 @@ interface HotOddsResult {
 function detectSport(match: Match): SportKind {
   const sport  = String(match.sport ?? match.sportEnum ?? "").toLowerCase();
   const source = String(match.source ?? "").toUpperCase();
-  if (source === "ADMIN_CREATED") return "admin";
+  if (source.startsWith("ADMIN_")) return "admin";
   if (sport.includes("basket") || sport === "basketball") return "basketball";
   if (sport.includes("american") || sport === "nfl" || sport === "american_football") return "nfl";
   if (sport.includes("baseball")) return "baseball";
@@ -79,6 +80,24 @@ async function fetchMatchById(id: string, sport: SportKind): Promise<Match> {
     }
   }
   return ((res as Record<string, unknown>)?.data as Match) ?? (res as Match);
+}
+
+async function requireAdminLogos(match: Match): Promise<Match> {
+  const assigned = assignAdminLogos(match) as Match & { homeLogo?: string; awayLogo?: string };
+  if (typeof window === "undefined") return assigned;
+  const load = (src?: string) => new Promise<boolean>((resolve) => {
+    if (!src) { resolve(false); return; }
+    const image = new window.Image();
+    let settled = false;
+    const finish = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
+    image.onload = () => finish(true);
+    image.onerror = () => finish(false);
+    window.setTimeout(() => finish(false), 5000);
+    image.src = src;
+  });
+  const [homeReady, awayReady] = await Promise.all([load(assigned.homeLogo), load(assigned.awayLogo)]);
+  if (!homeReady || !awayReady) throw new Error("Admin match logos could not be loaded.");
+  return assigned;
 }
 
 // ---------------------------------------------------------------------------
@@ -646,6 +665,9 @@ export default function MatchDetailsPage({
         catch { m = await fetchMatchById(id, "admin"); }
       }
       const detectedSport = detectSport(m);
+      if (adminHint || hintedSport === "admin" || detectedSport === "admin") {
+        m = await requireAdminLogos(m);
+      }
       setSport(detectedSport);
       setMatch(m);
       // Start odds window timer for live matches

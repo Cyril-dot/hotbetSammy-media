@@ -6,7 +6,7 @@
 // =============================================================================
 
 import api, { type Match } from "./api";
-import { adminCrestFor } from "./logoCatalog";
+import { assignAdminLogos } from "./logoCatalog";
 
 export type SportKey = "football" | "basketball" | "tennis" | "baseball" | "nfl" | "mma";
 
@@ -284,7 +284,7 @@ function pickRandomAdminLogo(usage: Record<string, number>, exclude: Set<string>
  * match id in localStorage so a given admin match always shows the same
  * pair on every subsequent load.
  */
-function assignAdminLogos(adminMatches: EnrichedMatch[]): Map<string, AdminLogoAssignment> {
+function assignLegacyAdminLogos(adminMatches: EnrichedMatch[]): Map<string, AdminLogoAssignment> {
   const usage = loadLogoUsage();
   const assignments = loadLogoAssignments();
   let usageChanged = false;
@@ -332,11 +332,7 @@ function assignAdminLogos(adminMatches: EnrichedMatch[]): Map<string, AdminLogoA
 function resolveDisplayLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
   return matches.map((m) => {
     if (m.isAdmin) {
-      return {
-        ...m,
-        displayHomeLogo: adminCrestFor(m.homeTeam, "home"),
-        displayAwayLogo: adminCrestFor(m.awayTeam, "away"),
-      };
+      return assignAdminLogos(m) as EnrichedMatch;
     }
     return {
       ...m,
