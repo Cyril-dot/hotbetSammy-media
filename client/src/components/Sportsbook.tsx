@@ -7,6 +7,7 @@ import {
   type EnrichedMatch, type SportKey,
 } from "@/lib/sportsbook";
 import { useFavorites } from "@/lib/favorites";
+import { adminCrestFor } from "@/lib/logoCatalog";
 
 export type Pick = {
   id: string; match: string; market: string; selection: string; odd: number;
@@ -107,6 +108,27 @@ export function TeamCrest({ url, name }: { url?: string; name: string }) {
 function MatchRow({
   match, hasDraw, picks, onPick, isAdmin = false, ended = false,
 }: { match: EnrichedMatch; hasDraw: boolean; picks: Pick[]; onPick: (p: Pick) => void; isAdmin?: boolean; ended?: boolean }) {
+  const adminHomeLogo = isAdmin ? adminCrestFor(match.homeTeam, "home") : match.displayHomeLogo;
+  const adminAwayLogo = isAdmin ? adminCrestFor(match.awayTeam, "away") : match.displayAwayLogo;
+  const [homeReady, setHomeReady] = useState(!isAdmin);
+  const [awayReady, setAwayReady] = useState(!isAdmin);
+  const [logoBlocked, setLogoBlocked] = useState(false);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    setHomeReady(false); setAwayReady(false); setLogoBlocked(false);
+    const preload = (src: string | undefined, ready: (value: boolean) => void) => {
+      if (!src) { ready(false); return; }
+      const image = new Image();
+      image.onload = () => { if (active) ready(true); };
+      image.onerror = () => { if (active) { setLogoBlocked(true); ready(false); } };
+      image.src = src;
+    };
+    preload(adminHomeLogo, setHomeReady);
+    preload(adminAwayLogo, setAwayReady);
+    return () => { active = false; };
+  }, [isAdmin, adminHomeLogo, adminAwayLogo]);
+  if (isAdmin && (logoBlocked || !homeReady || !awayReady)) return null;
   const isLive = !ended && isMatchLive(match);
   // Live prices are valid bet selections too. Only finished matches and
   // synthetic/estimated prices must stay out of the slip.
@@ -157,12 +179,12 @@ function MatchRow({
 
       <Link href={matchHref} className="sb-fixture">
         <span className="sb-team-line">
-          <TeamCrest url={match.displayHomeLogo} name={match.homeTeam ?? ""} />
+          <TeamCrest url={adminHomeLogo} name={match.homeTeam ?? ""} />
           <span className="sb-team-name">{match.homeTeam}</span>
           {showScore && match.scoreHome != null && <em>{match.scoreHome}</em>}
         </span>
         <span className="sb-team-line">
-          <TeamCrest url={match.displayAwayLogo} name={match.awayTeam ?? ""} />
+          <TeamCrest url={adminAwayLogo} name={match.awayTeam ?? ""} />
           <span className="sb-team-name">{match.awayTeam}</span>
           {showScore && match.scoreAway != null && <em>{match.scoreAway}</em>}
         </span>
