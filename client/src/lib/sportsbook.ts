@@ -6,6 +6,7 @@
 // =============================================================================
 
 import api, { type Match } from "./api";
+import { adminCrestFor } from "./logoCatalog";
 
 export type SportKey = "football" | "basketball" | "tennis" | "baseball" | "nfl" | "mma";
 
@@ -329,16 +330,12 @@ function assignAdminLogos(adminMatches: EnrichedMatch[]): Map<string, AdminLogoA
  * their own hardcoded crest, or a generated-initials fallback for everyone
  * else. */
 function resolveDisplayLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
-  const adminMatches = matches.filter((m) => m.isAdmin);
-  const adminLogos = adminMatches.length > 0 ? assignAdminLogos(adminMatches) : new Map<string, AdminLogoAssignment>();
-
   return matches.map((m) => {
     if (m.isAdmin) {
-      const assigned = adminLogos.get(m.id);
       return {
         ...m,
-        displayHomeLogo: sanitizeLogo(m.homeLogo) || assigned?.home || generateCrest(m.homeTeam ?? ""),
-        displayAwayLogo: sanitizeLogo(m.awayLogo) || assigned?.away || generateCrest(m.awayTeam ?? ""),
+        displayHomeLogo: adminCrestFor(m.homeTeam, "home"),
+        displayAwayLogo: adminCrestFor(m.awayTeam, "away"),
       };
     }
     return {
@@ -1240,7 +1237,7 @@ export async function fetchMatchDetail(id: string, hintSport?: SportKey | "admin
         const h2h = await settleList(api.publicFootball.h2h(id));
         if (h2h) enriched.h2h = h2h.data;
       }
-      const result = ensureOdds([enriched])[0];
+      const result = resolveDisplayLogos(ensureOdds([enriched]))[0];
       log(`attempt[${attempt.sport}]`, "resolved match", { resolvedSport, isAdmin: result.isAdmin, isSyntheticOdds: result.isSyntheticOdds });
       return result;
     } catch (err) {
@@ -1287,7 +1284,7 @@ export async function fetchMatchDetail(id: string, hintSport?: SportKey | "admin
       const enriched: MatchDetail = { ...match, sport: "football", isAdmin: false, oddsMap };
       const h2h = await settleList(api.publicFootball.h2h(id));
       if (h2h) enriched.h2h = h2h.data;
-      const result = ensureOdds([enriched])[0];
+      const result = resolveDisplayLogos(ensureOdds([enriched]))[0];
       log("football bulk-source lookup", "resolved match", { isSyntheticOdds: result.isSyntheticOdds });
       return result;
     } catch (err) {
