@@ -79,31 +79,18 @@ export async function clearClientCache(): Promise<void> {
 }
 
 /**
- * Mobile browsers run this once per URL load. A short-lived URL marker avoids
- * an infinite reload loop, then is removed from the address bar immediately.
- * Desktop browsers remain opt-in through `?clear-cache=1`.
+ * Run the client reset only when explicitly requested with `?clear-cache=1`.
+ *
+ * This must not run automatically on mobile: a normal page refresh would clear
+ * the access token before SessionProvider can restore the signed-in session.
  */
 export function runTemporaryClientReset(): void {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
-  const requested = url.searchParams.get("clear-cache") === "1";
-  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  const completed = url.searchParams.get("clear-cache-complete") === "1";
-
-  if (completed) {
-    url.searchParams.delete("clear-cache-complete");
-    window.history.replaceState({}, document.title, url.toString());
-    return;
-  }
-
-  if (!requested && !mobile) return;
-
-  if (mobile) {
-    url.searchParams.set("clear-cache-complete", "1");
-  }
+  if (url.searchParams.get("clear-cache") !== "1") return;
 
   void clearClientCache().finally(() => {
-    if (!mobile) url.searchParams.delete("clear-cache");
+    url.searchParams.delete("clear-cache");
     window.location.replace(url.toString());
   });
 }
