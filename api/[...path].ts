@@ -21,7 +21,7 @@ const skippedHeaders = new Set([
 function minimumDepositError(path: string, method: string, body: any): string | null {
   if (method !== "POST" || !path.startsWith("/api/wallet/deposit/")) return null;
   const amount = Number(body?.amount);
-  if (Number.isFinite(amount) && amount < 300) return "The minimum deposit is GHS 300.";
+  if (Number.isFinite(amount) && amount < 200) return "The minimum deposit is GHS 200.";
   return null;
 }
 
