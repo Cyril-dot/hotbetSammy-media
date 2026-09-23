@@ -8,6 +8,45 @@ type Payload = Record<string, any>;
 
 const MIN_DEPOSIT = 200;
 const QUICK_AMOUNTS = [MIN_DEPOSIT, 500, 1000, 2000, 5000, 10000];
+const KNOWN_DEPOSIT_PHONES_KEY = "hotbet.deposit.known-phones.v1";
+
+function normalizeDepositPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.startsWith("233") ? `0${digits.slice(3)}` : digits;
+}
+
+function hasKnownDepositPhone(phone: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const known = JSON.parse(window.localStorage.getItem(KNOWN_DEPOSIT_PHONES_KEY) ?? "[]");
+    return Array.isArray(known) && known.includes(normalizeDepositPhone(phone));
+  } catch {
+    return false;
+  }
+}
+
+function rememberDepositPhone(phone: string): void {
+  if (typeof window === "undefined") return;
+  const normalized = normalizeDepositPhone(phone);
+  if (!normalized) return;
+  try {
+    const existing = JSON.parse(window.localStorage.getItem(KNOWN_DEPOSIT_PHONES_KEY) ?? "[]");
+    const known = Array.isArray(existing) ? existing.filter((value): value is string => typeof value === "string") : [];
+    if (!known.includes(normalized)) {
+      window.localStorage.setItem(KNOWN_DEPOSIT_PHONES_KEY, JSON.stringify([...known, normalized]));
+    }
+  } catch {
+    // OTP behavior must still work if browser storage is unavailable.
+  }
+}
+
+function paystackRequiresOtp(data: Payload): boolean {
+  const nextType = String(data.next_action?.type ?? data.nextAction?.type ?? "").toLowerCase();
+  return ["submit_otp", "send_otp", "otp"].includes(nextType)
+    || data.otp_required === true
+    || data.requires_otp === true
+    || data.requiresOtp === true;
+}
 const PROVIDERS = [
   ["mtn", "MTN Mobile Money"],
   ["atl", "AirtelTigo Money"],
@@ -111,9 +150,14 @@ export default function DepositCenter() {
       }
       if (!ref) throw new Error("Paystack did not return a payment reference.");
       setReference(ref);
-      const nextType = String(data.next_action?.type ?? "").toLowerCase();
-      if (nextType === "submit_otp") setState("otp");
-      else if (nextType === "submit_birthday") setState("birthday");
+      const nextType = String(data.next_action?.type ?? data.nextAction?.type ?? "").toLowerCase();
+      const newPhoneNeedsOtp = channel === "momo" && !hasKnownDepositPhone(phone);
+      // Paystack can omit next_action for a new phone even though it has sent an OTP.
+      // New numbers must always expose the OTP field so the user can continue.
+      if (newPhoneNeedsOtp || paystackRequiresOtp(data)) {
+        setState("otp");
+        setMessage("Enter the OTP sent to this mobile number by Paystack.");
+      } else if (nextType === "submit_birthday") setState("birthday");
       else { setState("pending"); setMessage("Approve the Paystack prompt on your phone. We will confirm it automatically."); }
     } catch (e) { setState("failed"); setError(friendlyError(e)); }
     finally { setChecking(false); }
@@ -127,6 +171,7 @@ export default function DepositCenter() {
         ? await api.deposits.paystackMomoSubmitOtp({ otp: otp.trim(), reference })
         : await api.deposits.paystackBankSubmitOtp({ otp: otp.trim(), reference });
       const data = payload(response);
+      if (channel === "momo") rememberDepositPhone(phone);
       setOtp("");
       if (isPaid(data)) { setState("success"); setMessage("Payment confirmed. Your wallet will update automatically."); }
       else { setState("pending"); setMessage("OTP accepted. We are confirming the payment with Paystack."); }
@@ -144,7 +189,7 @@ export default function DepositCenter() {
 
   const reset = () => { setState("idle"); setReference(""); setOtp(""); setError(""); setMessage(""); };
 
-  return <main className="dep-page"><style>{styles}</style><section className="dep-hero"><div className="dep-hero-icon"><ShieldCheck size={22} /></div><div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Paystack</h1><p>Mobile Money, bank and card deposits are processed securely by Paystack.</p></div></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={14} /> Paystack secured</span><span><CheckCircle2 size={14} /> Wallet credited after confirmation</span><span><RefreshCw size={14} /> Automatic payment verification</span></div><div className="dep-card"><div className="dep-card-head"><div><h2>Add funds</h2><p>Choose a payment method and follow the secure Paystack steps.</p></div><span className="dep-provider">PAYSTACK</span></div><div className="dep-methods"><button className={channel === "momo" ? "active" : ""} onClick={() => { reset(); setChannel("momo"); }}><Smartphone size={17} /><b>Mobile Money</b><small>MTN · AirtelTigo · Telecel</small></button><button className={channel === "bank" ? "active" : ""} onClick={() => { reset(); setChannel("bank"); }}><Banknote size={17} /><b>Bank</b><small>Paystack bank charge</small></button><button className={channel === "card" ? "active" : ""} onClick={() => { reset(); setChannel("card"); }}><CreditCard size={17} /><b>Card</b><small>Secure hosted checkout</small></button></div><label className="dep-field"><span>Deposit amount · GHS (minimum 200)</span><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} disabled={state === "pending" || state === "otp" || state === "birthday"} /></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div>{channel === "momo" && <div className="dep-grid"><label className="dep-field"><span>Mobile number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Network</span><select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>{PROVIDERS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>}{channel === "bank" && <div className="dep-grid"><label className="dep-field"><span>Paystack bank code</span><input value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="Bank code" /></label><label className="dep-field"><span>Account number</span><input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" inputMode="numeric" /></label><label className="dep-field"><span>Birthday if requested</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label></div>}{state === "otp" && <div className="dep-step"><b>Enter Paystack OTP</b><p>Paystack requires the one-time code sent by your provider.</p><input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" inputMode="numeric" /></div>}{state === "birthday" && <div className="dep-step"><b>Confirm bank birthday</b><p>Paystack requires the account holder birthday to continue.</p><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></div>}{error && <div className="dep-alert error">{error}</div>}{message && <div className="dep-alert ok">{message}</div>}{state === "success" ? <div className="dep-success"><CheckCircle2 size={28} /><b>Deposit confirmed</b><span>Reference: {reference}</span><button onClick={reset}>Make another deposit</button></div> : state === "otp" ? <button className="dep-primary" onClick={submitOtp} disabled={checking}>{checking ? <Loader2 className="dep-spin" size={16} /> : null}{checking ? "Submitting…" : "Submit OTP"}</button> : state === "birthday" ? <button className="dep-primary" onClick={submitBirthday} disabled={checking}>{checking ? "Submitting…" : "Continue"}</button> : <button className="dep-primary" onClick={start} disabled={checking || state === "pending"}>{checking ? <Loader2 className="dep-spin" size={16} /> : channel === "card" ? <CreditCard size={16} /> : <Phone size={16} />}{checking ? "Starting Paystack…" : channel === "card" ? "Continue to Paystack checkout" : state === "pending" ? "Waiting for confirmation…" : "Start Paystack deposit"}</button>}{state === "pending" && <button className="dep-check" onClick={() => verify().catch((e) => setError(friendlyError(e)))} disabled={checking}><RefreshCw size={14} /> Check payment status</button>}<small className="dep-note">Your payment reference is {reference ? "" : "created securely by Paystack after you start"}{reference && <code>{reference}</code>}. Never share OTPs with anyone.</small></div></section></main>;
+  return <main className="dep-page"><style>{styles}</style><section className="dep-hero"><div className="dep-hero-icon"><ShieldCheck size={22} /></div><div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Paystack</h1><p>Mobile Money, bank and card deposits are processed securely by Paystack.</p></div></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={14} /> Paystack secured</span><span><CheckCircle2 size={14} /> Wallet credited after confirmation</span><span><RefreshCw size={14} /> Automatic payment verification</span></div><div className="dep-card"><div className="dep-card-head"><div><h2>Add funds</h2><p>Choose a payment method and follow the secure Paystack steps.</p></div><span className="dep-provider">PAYSTACK</span></div><div className="dep-methods"><button className={channel === "momo" ? "active" : ""} onClick={() => { reset(); setChannel("momo"); }}><Smartphone size={17} /><b>Mobile Money</b><small>MTN · AirtelTigo · Telecel</small></button><button className={channel === "bank" ? "active" : ""} onClick={() => { reset(); setChannel("bank"); }}><Banknote size={17} /><b>Bank</b><small>Paystack bank charge</small></button><button className={channel === "card" ? "active" : ""} onClick={() => { reset(); setChannel("card"); }}><CreditCard size={17} /><b>Card</b><small>Secure hosted checkout</small></button></div><label className="dep-field"><span>Deposit amount · GHS (minimum 200)</span><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} disabled={state === "pending" || state === "otp" || state === "birthday"} /></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div>{channel === "momo" && <div className="dep-grid"><label className="dep-field"><span>Mobile number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Network</span><select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>{PROVIDERS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>}{channel === "bank" && <div className="dep-grid"><label className="dep-field"><span>Paystack bank code</span><input value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="Bank code" /></label><label className="dep-field"><span>Account number</span><input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" inputMode="numeric" /></label><label className="dep-field"><span>Birthday if requested</span><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label></div>}{state === "otp" && <div className="dep-step"><b>Enter Paystack OTP</b><p>Enter the OTP sent to this mobile number by Paystack.</p><input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" inputMode="numeric" /></div>}{state === "birthday" && <div className="dep-step"><b>Confirm bank birthday</b><p>Paystack requires the account holder birthday to continue.</p><input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></div>}{error && <div className="dep-alert error">{error}</div>}{message && <div className="dep-alert ok">{message}</div>}{state === "success" ? <div className="dep-success"><CheckCircle2 size={28} /><b>Deposit confirmed</b><span>Reference: {reference}</span><button onClick={reset}>Make another deposit</button></div> : state === "otp" ? <button className="dep-primary" onClick={submitOtp} disabled={checking}>{checking ? <Loader2 className="dep-spin" size={16} /> : null}{checking ? "Submitting…" : "Submit OTP"}</button> : state === "birthday" ? <button className="dep-primary" onClick={submitBirthday} disabled={checking}>{checking ? "Submitting…" : "Continue"}</button> : <button className="dep-primary" onClick={start} disabled={checking || state === "pending"}>{checking ? <Loader2 className="dep-spin" size={16} /> : channel === "card" ? <CreditCard size={16} /> : <Phone size={16} />}{checking ? "Starting Paystack…" : channel === "card" ? "Continue to Paystack checkout" : state === "pending" ? "Waiting for confirmation…" : "Start Paystack deposit"}</button>}{state === "pending" && <button className="dep-check" onClick={() => verify().catch((e) => setError(friendlyError(e)))} disabled={checking}><RefreshCw size={14} /> Check payment status</button>}<small className="dep-note">Your payment reference is {reference ? "" : "created securely by Paystack after you start"}{reference && <code>{reference}</code>}. Never share OTPs with anyone.</small></div></section></main>;
 }
 
 const styles = `
