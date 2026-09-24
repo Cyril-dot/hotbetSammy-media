@@ -99,7 +99,7 @@ export default function BookingCodePage() {
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
   const [placeError, setPlaceError] = useState("");
-  const [stake, setStake] = useState<string>("");
+  const [stake, setStake] = useState<string>(() => currency === "NGN" ? "13000" : "10");
 
   const handleLoad = async () => {
     const trimmed = code.trim().toUpperCase();
