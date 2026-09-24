@@ -12,6 +12,7 @@ import type { Pick } from "./Sportsbook";
 import api from "@/lib/api";
 import type { Match } from "@/lib/api";
 import { assignAdminLogos } from "@/lib/logoCatalog";
+import { useAutoRefresh } from "@/lib/autoRefresh";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -752,12 +753,13 @@ export default function MatchDetailsPage({
     }
   }, [sport, loading, match, fetchOdds, fetchDetails]);
 
-  // ── Live matches: re-fetch every 10 min (hotbet pattern) ───────────
-  useEffect(() => {
+  // Live match state, odds, and detail panels follow the same background
+  // refresh bus as the sportsbook list.
+  useAutoRefresh(async () => {
     if (!match || !LIVE_STATUSES_SET.has(match.status ?? "")) return;
-    const interval = setInterval(() => { fetchMatch(); }, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [match, fetchMatch]);
+    await fetchMatch();
+    await Promise.all([fetchOdds(match.id, sport), fetchDetails(match.id, sport)]);
+  }, { intervalMs: 30_000 });
 
   // Derive MatchDetail-compatible shape for the rest of the render
   const isLive  = LIVE_STATUSES_SET.has(match?.status ?? "");

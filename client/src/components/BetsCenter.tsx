@@ -7,6 +7,7 @@ import { currencyForCountry } from "@/lib/countries";
 import { COUNTRY_CONFIGS } from "@/lib/withdrawalGate";
 import type { Pick } from "./Sportsbook";
 import AdminBookingCodeNotice from "./AdminBookingCodeNotice";
+import { useAutoRefresh } from "@/lib/autoRefresh";
 
 const HIDDEN_TICKETS_KEY = "hotbet_hidden_tickets";
 
@@ -406,6 +407,7 @@ export default function BetsCenter({
   };
 
   useEffect(() => { load(); }, []);
+  useAutoRefresh(load, { intervalMs: 30_000 });
 
   const openBets = useMemo(() => bets.filter(isOpenBet), [bets]);
   const settledBets = useMemo(() => bets, [bets]);

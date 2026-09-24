@@ -4,6 +4,7 @@ import { Award, Bell, CheckCheck, RefreshCw, Wallet } from "lucide-react";
 import api, { ApiError, type Bet, type Transaction } from "@/lib/api";
 import { useSession, pickUserField } from "@/lib/session";
 import { currencyForCountry } from "@/lib/countries";
+import { useAutoRefresh } from "@/lib/autoRefresh";
 
 interface Notice { id: string; icon: "wallet" | "bet"; title: string; detail: string; at: string; }
 
@@ -41,6 +42,7 @@ export default function NotificationsPage() {
   };
 
   useEffect(() => { load(); }, []);
+  useAutoRefresh(load, { intervalMs: 30_000 });
 
   const notices: Notice[] = useMemo(() => {
     const fromTx: Notice[] = txs.map((t) => ({

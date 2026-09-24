@@ -8,6 +8,7 @@ import {
 } from "@/lib/sportsbook";
 import { useFavorites } from "@/lib/favorites";
 import { adminCrestFor } from "@/lib/logoCatalog";
+import { useAutoRefresh } from "@/lib/autoRefresh";
 
 export type Pick = {
   id: string; match: string; market: string; selection: string; odd: number;
@@ -446,11 +447,7 @@ export default function Sportsbook({
 
   useEffect(() => { load(sport); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sport]);
 
-  useEffect(() => {
-    const interval = setInterval(() => { if (document.visibilityState === "visible") load(sport); }, 30_000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport]);
+  useAutoRefresh(() => load(sport), { intervalMs: 30_000 });
 
   const hasDraw = !TWO_WAY_SPORTS.has(sport);
   const current = matches[sport];

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import api, { ApiError } from "./api";
+import { useAutoRefresh } from "./autoRefresh";
 
 interface SessionState {
   token: string | null;
@@ -139,6 +140,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Keep balance and account identity current after deposits, withdrawals,
+  // bets, payment callbacks, and background reconciliation.
+  useAutoRefresh(load, { enabled: Boolean(token), intervalMs: 30_000 });
 
   // Refreshing the page must not log the user out: we only re-validate silently in the background.
   useEffect(() => {

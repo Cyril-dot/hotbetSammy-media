@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { CheckCircle2, RefreshCw, Wallet } from "lucide-react";
 import api, { ApiError, type Transaction } from "@/lib/api";
 import { isCompletedWithdrawal } from "@/lib/withdrawalCelebration";
+import { useAutoRefresh } from "@/lib/autoRefresh";
 
 const FILTERS: { key: string; label: string; kinds: string[] }[] = [
   { key: "all", label: "All", kinds: [] },
@@ -47,6 +48,7 @@ export default function TransactionsPage() {
   };
 
   useEffect(() => { load(0); }, []);
+  useAutoRefresh(() => load(page), { intervalMs: 30_000 });
 
   const activeFilter = FILTERS.find((f) => f.key === filter)!;
   const filtered = activeFilter.kinds.length === 0 ? transactions : transactions.filter((t) => activeFilter.kinds.includes(t.kind));

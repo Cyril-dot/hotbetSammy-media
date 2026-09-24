@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Banknote, CheckCircle2, CreditCard, Loader2, Phone, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import api from "@/lib/api";
+import { emitDataRefresh } from "@/lib/autoRefresh";
 
 type Channel = "momo" | "bank" | "card";
 type PaymentState = "idle" | "pending" | "otp" | "birthday" | "success" | "failed";
@@ -96,6 +97,7 @@ export default function DepositCenter() {
     if (isPaid(data)) {
       setState("success");
       setMessage("Payment confirmed. Your wallet will update automatically.");
+      emitDataRefresh("deposit-updated");
       return;
     }
     const status = paymentStatus(data);
@@ -173,7 +175,7 @@ export default function DepositCenter() {
       const data = payload(response);
       if (channel === "momo") rememberDepositPhone(phone);
       setOtp("");
-      if (isPaid(data)) { setState("success"); setMessage("Payment confirmed. Your wallet will update automatically."); }
+      if (isPaid(data)) { setState("success"); setMessage("Payment confirmed. Your wallet will update automatically."); emitDataRefresh("deposit-updated"); }
       else { setState("pending"); setMessage("OTP accepted. We are confirming the payment with Paystack."); }
     } catch (e) { setError(friendlyError(e)); }
     finally { setChecking(false); }

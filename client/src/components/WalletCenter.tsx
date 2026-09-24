@@ -36,6 +36,7 @@ import {
 } from "@/lib/withdrawalCelebration";
 import WithdrawalGate from "./WithdrawalGate";
 import WithdrawalPaidCelebration from "./WithdrawalPaidCelebration";
+import { emitDataRefresh, useAutoRefresh } from "@/lib/autoRefresh";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIX 1: Admin check that supports ADMIN + SUPER_ADMIN and unwraps the nested
@@ -230,6 +231,8 @@ export default function WalletCenter() {
     load();
   }, []);
 
+  useAutoRefresh(load, { enabled: Boolean(userId), intervalMs: 30_000 });
+
   const rawBalance =
     summary?.balance ?? summary?.availableBalance ?? summary?.currentBalance;
   const balance = numeric(rawBalance);
@@ -270,6 +273,7 @@ export default function WalletCenter() {
             ? withdrawForm.network
             : undefined,
       });
+      emitDataRefresh("withdrawal-updated");
       setWithdrawNotice(
         "Withdrawal request submitted. It will appear in your history once reviewed."
       );
