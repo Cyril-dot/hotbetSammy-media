@@ -12,7 +12,7 @@ import { adminCrestFor } from "@/lib/logoCatalog";
 export type Pick = {
   id: string; match: string; market: string; selection: string; odd: number;
   league?: string; homeTeam?: string; awayTeam?: string; kickoffAt?: string;
-  isLive?: boolean; scoreHome?: number; scoreAway?: number;
+  isLive?: boolean; scoreHome?: number; scoreAway?: number; isAdmin?: boolean;
 };
 
 export const SPORT_TABS: { key: SportKey; label: string; icon: typeof Trophy; swatch: string }[] = [
@@ -142,7 +142,7 @@ function MatchRow({
   const pick = (sel: string, odd: number) => onPick({
     id: match.id, match: matchLabel, market: "1X2", selection: sel, odd,
     league: match.league, homeTeam: match.homeTeam, awayTeam: match.awayTeam,
-    kickoffAt: match.kickoffAt, isLive, scoreHome: match.scoreHome, scoreAway: match.scoreAway,
+    kickoffAt: match.kickoffAt, isLive, scoreHome: match.scoreHome, scoreAway: match.scoreAway, isAdmin,
   });
 
   const slots = hasDraw

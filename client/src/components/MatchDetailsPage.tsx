@@ -372,14 +372,14 @@ function useOddsWindow(match: { id?: string; status?: string } | null) {
 // ---------------------------------------------------------------------------
 // Market components
 // ---------------------------------------------------------------------------
-function MarketGroup({ group, market, matchId, picks, onPick, clickable, homeTeam, awayTeam }: {
+function MarketGroup({ group, market, matchId, picks, onPick, clickable, homeTeam, awayTeam, isAdmin }: {
   group: OddsGroup; market: string; matchId: string; picks: Pick[];
-  onPick: (p: Pick) => void; clickable: boolean; homeTeam?: string; awayTeam?: string;
+  onPick: (p: Pick) => void; clickable: boolean; homeTeam?: string; awayTeam?: string; isAdmin?: boolean;
 }) {
   const isSel = (sel: string) => picks.some(p => p.id === matchId && p.market === market && p.selection === sel);
   const pick  = (sel: string, odd: number) => {
     if (!clickable || !odd || odd <= 0) return;
-     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market, selection: sel, odd, homeTeam, awayTeam });
+     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market, selection: sel, odd, homeTeam, awayTeam, isAdmin });
   };
   return (
     <div className="md-market-section">
@@ -399,9 +399,9 @@ function MarketGroup({ group, market, matchId, picks, onPick, clickable, homeTea
   );
 }
 
-function CorrectScoreSection({ groups, matchId, picks, onPick, clickable, homeTeam, awayTeam }: {
+function CorrectScoreSection({ groups, matchId, picks, onPick, clickable, homeTeam, awayTeam, isAdmin }: {
   groups: OddsGroup[]; matchId: string; picks: Pick[]; onPick: (p: Pick) => void;
-  clickable: boolean; homeTeam?: string; awayTeam?: string;
+  clickable: boolean; homeTeam?: string; awayTeam?: string; isAdmin?: boolean;
 }) {
   const market = groups[0]?.market ?? "correct_score";
   const scores = useMemo(() => {
@@ -420,7 +420,7 @@ function CorrectScoreSection({ groups, matchId, picks, onPick, clickable, homeTe
   const isSel = (sel: string) => picks.some(p => p.id === matchId && p.market === market && p.selection === sel);
   const pick  = (sel: string, odd: number) => {
     if (!clickable || !odd || odd <= 0) return;
-     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market, selection: sel, odd, homeTeam, awayTeam });
+     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market, selection: sel, odd, homeTeam, awayTeam, isAdmin });
   };
   const parse = (s: string) => { const m = s.match(/(\d+)[:\-](\d+)/); return m ? {h:+m[1],a:+m[2]} : null; };
   const homeWins = scores.filter(s => { const p=parse(s.label); return p&&p.h>p.a; });
@@ -457,14 +457,14 @@ function CorrectScoreSection({ groups, matchId, picks, onPick, clickable, homeTe
   );
 }
 
-function HandicapSection({ groups, matchId, picks, onPick, clickable, homeTeam, awayTeam }: {
+function HandicapSection({ groups, matchId, picks, onPick, clickable, homeTeam, awayTeam, isAdmin }: {
   groups: OddsGroup[]; matchId: string; picks: Pick[]; onPick: (p: Pick) => void;
-  clickable: boolean; homeTeam?: string; awayTeam?: string;
+  clickable: boolean; homeTeam?: string; awayTeam?: string; isAdmin?: boolean;
 }) {
   const isSel = (mkt: string, sel: string) => picks.some(p => p.id === matchId && p.market === mkt && p.selection === sel);
   const pick  = (mkt: string, sel: string, odd: number) => {
     if (!clickable || !odd || odd <= 0) return;
-     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market: mkt, selection: sel, odd, homeTeam, awayTeam });
+     onPick({ id: matchId, match: `${homeTeam ?? ""} vs ${awayTeam ?? ""}`, market: mkt, selection: sel, odd, homeTeam, awayTeam, isAdmin });
   };
   return (
     <div className="md-market-section">
@@ -800,13 +800,14 @@ export default function MatchDetailsPage({
   const matchSportKey = normalizeSportKey(match.sport ?? "");
   const hasDraw = !["basketball","nfl","baseball","mma"].includes(sport);
   const clickable = !locked;
+  const isAdminMatch = adminHint || sport === "admin";
   const matchLabel = `${match.homeTeam} vs ${match.awayTeam}`;
   const isSel = (sel: string) => picks.some(p => p.id === match.id && p.market === "1X2" && p.selection === sel);
   const pick  = (sel: string, odd: number) => {
     if (!odd || odd <= 0) return;
     onPick({ id: match.id, match: matchLabel, market: "1X2", selection: sel, odd,
       league: match.league, homeTeam: match.homeTeam, awayTeam: match.awayTeam,
-      kickoffAt: match.kickoffAt, isLive, scoreHome: match.scoreHome, scoreAway: match.scoreAway });
+      kickoffAt: match.kickoffAt, isLive, scoreHome: match.scoreHome, scoreAway: match.scoreAway, isAdmin: isAdminMatch });
   };
   const slots = hasDraw
     ? [["1", match.homeTeam, homeOpt?.odd ?? 0],["X","Draw", drawOpt?.odd ?? 0],["2", match.awayTeam, awayOpt?.odd ?? 0]]
@@ -943,19 +944,19 @@ export default function MatchDetailsPage({
                 {oddsHalfTime.map((g,i) => (
                   <MarketGroup key={`ht-${i}`} group={g} market={g.market} matchId={match.id}
                     picks={picks} onPick={onPick} clickable={clickable}
-                    homeTeam={match.homeTeam} awayTeam={match.awayTeam}
+                    homeTeam={match.homeTeam} awayTeam={match.awayTeam} isAdmin={isAdminMatch}
                   />
                 ))}
                 {oddsCorrectScore.length > 0 && (
                   <CorrectScoreSection groups={oddsCorrectScore} matchId={match.id}
                     picks={picks} onPick={onPick} clickable={clickable}
-                    homeTeam={match.homeTeam} awayTeam={match.awayTeam}
+                    homeTeam={match.homeTeam} awayTeam={match.awayTeam} isAdmin={isAdminMatch}
                   />
                 )}
                 {oddsHandicap.length > 0 && (
                   <HandicapSection groups={oddsHandicap} matchId={match.id}
                     picks={picks} onPick={onPick} clickable={clickable}
-                    homeTeam={match.homeTeam} awayTeam={match.awayTeam}
+                    homeTeam={match.homeTeam} awayTeam={match.awayTeam} isAdmin={isAdminMatch}
                   />
                 )}
                 {oddsHalfTime.length === 0 && oddsCorrectScore.length === 0 && oddsHandicap.length === 0 && !oddsLoading && (

@@ -6,6 +6,7 @@ import { useSession, pickUserField } from "@/lib/session";
 import { currencyForCountry } from "@/lib/countries";
 import { COUNTRY_CONFIGS } from "@/lib/withdrawalGate";
 import type { Pick } from "./Sportsbook";
+import AdminBookingCodeNotice from "./AdminBookingCodeNotice";
 
 const HIDDEN_TICKETS_KEY = "hotbet_hidden_tickets";
 
@@ -292,7 +293,7 @@ function RecommendedCarousel({ picks, onAddLegs }: { picks: Pick[]; onAddLegs: (
 // ---------------------------------------------------------------------------
 // Inline betslip panel (shown at top of Open Bets tab when picks exist)
 // ---------------------------------------------------------------------------
-function InlineBetslip({ picks, setPicks, onPlace, curr }: { picks: Pick[]; setPicks: (p: Pick[]) => void; onPlace: (stake: number) => Promise<void>; curr: string }) {
+function InlineBetslip({ picks, setPicks, onPlace, curr, adminBookingCode, adminBookingCodeError }: { picks: Pick[]; setPicks: (p: Pick[]) => void; onPlace: (stake: number) => Promise<void>; curr: string; adminBookingCode?: string | null; adminBookingCodeError?: string }) {
   const countryKey = curr === "NGN" ? "NG" : "GH";
   const cfg = COUNTRY_CONFIGS[countryKey];
   const MIN_STAKE = cfg.minStake;
@@ -367,11 +368,15 @@ export default function BetsCenter({
   picks = [],
   setPicks = () => undefined,
   onPlace = async () => undefined,
+  adminBookingCode,
+  adminBookingCodeError,
 }: {
   defaultTab?: "open" | "history";
   picks?: Pick[];
   setPicks?: (p: Pick[]) => void;
   onPlace?: (stake: number) => Promise<void>;
+  adminBookingCode?: string | null;
+  adminBookingCodeError?: string;
 }) {
   const [, setLocation] = useLocation();
   const { user } = useSession();
@@ -470,10 +475,11 @@ export default function BetsCenter({
       {/* ── OPEN BETS TAB ── */}
       {tab === "open" && (
         <div className="bc-body">
+          <AdminBookingCodeNotice code={adminBookingCode} error={adminBookingCodeError} />
           {/* Inline betslip — always at top when picks exist */}
           {picks.length > 0 && (
             <div className="bc-flat-list">
-              <InlineBetslip picks={picks} setPicks={setPicks} onPlace={onPlace} curr={curr} />
+              <InlineBetslip picks={picks} setPicks={setPicks} onPlace={onPlace} curr={curr} adminBookingCode={adminBookingCode} adminBookingCodeError={adminBookingCodeError} />
             </div>
           )}
 
