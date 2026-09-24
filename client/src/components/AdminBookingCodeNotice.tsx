@@ -32,9 +32,8 @@ export default function AdminBookingCodeNotice({
           <div className="admin-booking-code-heading">
             <span className="admin-booking-code-icon"><KeyRound size={15} /></span>
             <div>
-              <span className="admin-booking-code-eyebrow">ADMIN ONLY</span>
               <h3>Booking code generated</h3>
-              <p>Your admin-created game was staked and its booking code is ready to share.</p>
+              <p>Your booking code is ready to share.</p>
             </div>
           </div>
           <div className="admin-booking-code-value">
