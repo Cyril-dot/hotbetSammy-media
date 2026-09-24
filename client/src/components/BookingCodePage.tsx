@@ -14,6 +14,7 @@ type LoadedMatch = {
 };
 
 type LoadedBet = {
+  id?: string;
   code: string;
   matches: LoadedMatch[];
   totalOdd: number;
@@ -72,6 +73,7 @@ function mapRedeemResponse(trimmedCode: string, data: RedeemResponse): LoadedBet
       : Number(booking.totalOdds ?? 0);
 
   return {
+    id: typeof booking.id === "string" ? booking.id : undefined,
     code: String(booking.code ?? trimmedCode),
     matches,
     totalOdd,
@@ -162,7 +164,12 @@ export default function BookingCodePage() {
         setPlacing(false);
         return;
       }
-      await api.bets.place({ stake: stakeNum, currency, selections });
+      await api.bets.place({
+        stake: stakeNum,
+        currency,
+        selections,
+        bookingCodeUsedId: bet.id,
+      });
       setPlaced(true);
       setTimeout(() => setLocation("/open-bets"), 1400);
     } catch (err) {

@@ -1205,19 +1205,19 @@ export const adminBooking = {
   createBookingCode: (body: CreateBookingRequest) =>
     http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", body),
 
-  /** POST /api/admin/booking-codes — Admin-only matches */
+  /**
+   * POST /api/admin/booking-codes
+   *
+   * The current backend exposes one creation endpoint. Keep these named
+   * helpers as compatibility aliases for the admin UI, but do not send the
+   * unsupported bookingType field or call non-existent sub-routes.
+   */
   createAdminOnlyBookingCode: (body: CreateBookingRequest) =>
-    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", {
-      ...body,
-      bookingType: "ADMIN_ONLY",
-    }),
+    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", body),
 
-  /** POST /api/admin/booking-codes — Mixed */
+  /** Backend-compatible alias for the mixed selection UI. */
   createMixedBookingCode: (body: CreateBookingRequest) =>
-    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", {
-      ...body,
-      bookingType: "MIXED",
-    }),
+    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", body),
 
   /** GET /api/admin/booking-codes/:id */
   detail: (id: string) =>
