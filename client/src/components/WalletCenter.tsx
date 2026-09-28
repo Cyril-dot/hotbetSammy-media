@@ -1,18 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WalletCenter — HotBet wallet page.
 //
-// Integrates the step-by-step WithdrawalGate:
-//   • Withdraw button is hidden until the user has won a settled bet
-//   • Once visible, clicking "Withdraw" shows the gate steps one by one
-//   • Gate progress is stored permanently in localStorage (per user)
-//   • Once fully unlocked, the normal withdrawal form appears
-//
-// FIX NOTES (bugs resolved):
-//   1. isAdmin now checks for "ADMIN" and "SUPER_ADMIN" roles, and correctly
-//      unwraps nested { user: {...}, wallet: {...} } session shape.
-//   2. Gate state in WalletCenter is refreshed after every step inside
-//      WithdrawalGate via the new onStepComplete callback prop.
-//   3. gateHasWon / gateUnlocked derived correctly from fresh gate state.
+// Withdrawals are submitted transparently from the wallet. No upfront fee,
+// qualifying deposit, or betting prerequisite is required to request a payout.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
@@ -21,46 +11,19 @@ import {
   ArrowUpRight,
   CheckCircle2,
   CreditCard,
-  Lock,
   Plus,
   RefreshCw,
   Wifi,
 } from "lucide-react";
 import api, { ApiError, type Transaction } from "@/lib/api";
 import { useSession, pickUserField } from "@/lib/session";
-import { readGateState, markBetWon, type GateState } from "@/lib/withdrawalGate";
 import {
   isCompletedWithdrawal,
   isUncelebratedWithdrawal,
   markWithdrawalCelebrated,
 } from "@/lib/withdrawalCelebration";
-import WithdrawalGate from "./WithdrawalGate";
 import WithdrawalPaidCelebration from "./WithdrawalPaidCelebration";
 import { emitDataRefresh, useAutoRefresh } from "@/lib/autoRefresh";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX 1: Admin check that supports ADMIN + SUPER_ADMIN and unwraps the nested
-//         { user: { role: "SUPER_ADMIN", ... }, wallet: {...} } session shape.
-// ─────────────────────────────────────────────────────────────────────────────
-function isStrictAdmin(user: unknown): boolean {
-  if (!user || typeof user !== "object") return false;
-
-  // Unwrap nested { user: {...}, wallet: {...} } shape
-  const raw = user as Record<string, unknown>;
-  const u = (raw.user && typeof raw.user === "object")
-    ? raw.user as Record<string, unknown>
-    : raw;
-
-  const adminRoles = new Set(["ADMIN", "SUPER_ADMIN"]);
-  const roleFields = ["role", "roles", "userRole", "accountRole", "authority", "authorities"];
-
-  for (const field of roleFields) {
-    const v = u[field];
-    if (typeof v === "string" && adminRoles.has(v.toUpperCase())) return true;
-    if (Array.isArray(v) && v.some((r) => adminRoles.has(String(r).toUpperCase()))) return true;
-  }
-  return false;
-}
 
 function numeric(value: unknown): number | null {
   const n =
@@ -103,23 +66,15 @@ export default function WalletCenter() {
   })();
   const currencyCode = country === "NG" ? "NGN" : "GHS";
 
-  // FIX 1: Supports ADMIN + SUPER_ADMIN, unwraps nested session shape.
-  const isAdmin = isStrictAdmin(user);
-
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBalance, setShowBalance] = useState(true);
 
-  // Gate state — loaded from localStorage, kept in sync
-  const [gate, setGate] = useState<GateState | null>(null);
-  // showGate: true = the step-by-step panel is open
-  const [showGate, setShowGate] = useState(false);
-  // showWithdrawForm: true = gate is unlocked, show raw form
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
 
-  // Withdrawal form state (only shown after gate is fully unlocked)
+  // Withdrawal form state
   const [withdrawForm, setWithdrawForm] = useState({
     amount: "",
     method: "MOBILE_MONEY",
@@ -135,15 +90,6 @@ export default function WalletCenter() {
     id: string;
     amount: number;
   } | null>(null);
-
-  // FIX 2: Centralised gate refresh — called after every step inside
-  // WithdrawalGate, and also after the final unlock.
-  const refreshGate = () => {
-    if (userId) {
-      const fresh = readGateState(userId, country);
-      setGate(fresh);
-    }
-  };
 
   const load = async () => {
     setLoading(true);
@@ -182,31 +128,6 @@ export default function WalletCenter() {
         });
       }
 
-      // ── Check for wins and update gate (skip for admins) ───────────────
-      if (userId && !isAdmin) {
-        const hasWinTx = allTxs.some((tx) => tx.kind === "BET_WIN");
-        let currentGate = readGateState(userId, country);
-
-        if (!currentGate.hasWon && hasWinTx) {
-          currentGate = markBetWon(userId, country);
-        }
-
-        if (!currentGate.hasWon) {
-          try {
-            const bets = await api.bets.getMyBets(0, 20);
-            const wonBet = (bets.data.content ?? []).find(
-              (b: { status: string }) => b.status === "WON"
-            );
-            if (wonBet) {
-              currentGate = markBetWon(userId, country);
-            }
-          } catch {
-            /* ignore — not critical */
-          }
-        }
-
-        setGate(currentGate);
-      }
     } catch (e) {
       setError(
         e instanceof ApiError && e.status === 401
@@ -217,15 +138,6 @@ export default function WalletCenter() {
       setLoading(false);
     }
   };
-
-  // Read gate from localStorage on mount / when userId changes (skip for admins)
-  useEffect(() => {
-    if (userId && !isAdmin) {
-      const g = readGateState(userId, country);
-      setGate(g);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isAdmin]);
 
   useEffect(() => {
     load();
@@ -296,19 +208,8 @@ export default function WalletCenter() {
     }
   };
 
-  // FIX 3: Derive gate flags. Admins (ADMIN or SUPER_ADMIN) bypass entirely.
-  const gateHasWon = isAdmin || (gate?.hasWon ?? false);
-  const gateUnlocked = isAdmin || gate?.stage === "unlocked";
-
   const handleWithdrawClick = () => {
-    if (!gateHasWon) return; // button not shown — safety guard
-    if (gateUnlocked) {
-      setShowWithdrawForm((v) => !v);
-      setShowGate(false);
-    } else {
-      setShowGate((v) => !v);
-      setShowWithdrawForm(false);
-    }
+    setShowWithdrawForm((v) => !v);
   };
 
   return (
@@ -370,26 +271,13 @@ export default function WalletCenter() {
             <Plus size={16} /> Deposit
           </Link>
 
-          {/* Withdraw button — locked until first win (admins always unlocked) */}
-          {!gateHasWon ? (
-            <div
-              className="wal-action wal-action-locked"
-              title="Win a bet to unlock withdrawals"
-            >
-              <Lock size={15} /> Withdraw
-            </div>
-          ) : (
-            <button
-              className={`wal-action wal-action-ghost${
-                showGate || showWithdrawForm ? " wal-action-active" : ""
-              }`}
-              onClick={handleWithdrawClick}
-              type="button"
-            >
-              <CreditCard size={16} />
-              {gateUnlocked ? "Withdraw" : "Withdraw ›"}
-            </button>
-          )}
+          <button
+            className={`wal-action wal-action-ghost${showWithdrawForm ? " wal-action-active" : ""}`}
+            onClick={handleWithdrawClick}
+            type="button"
+          >
+            <CreditCard size={16} /> Withdraw
+          </button>
 
           <button
             className="wal-action wal-action-icon"
@@ -401,32 +289,13 @@ export default function WalletCenter() {
           </button>
         </div>
 
-        {/* ── Win-gated note ── */}
-        {!gateHasWon && (
-          <div className="wal-win-note">
-            <Lock size={13} />
-            <span>
-              Withdrawals unlock after you win your first bet. Place a bet and
-              win to get started!
-            </span>
-          </div>
-        )}
+        <div className="wal-withdrawal-note">
+          <CheckCircle2 size={13} />
+          <span>Withdrawals are reviewed by our finance team. No deposit or fee is required to request your funds.</span>
+        </div>
 
-        {/* ── Withdrawal gate (step-by-step) — never shown to admins ── */}
-        {showGate && gateHasWon && !gateUnlocked && !isAdmin && (
-          <WithdrawalGate
-            onStepComplete={refreshGate}
-            onUnlocked={() => {
-              refreshGate();
-              setShowGate(false);
-              setShowWithdrawForm(true);
-            }}
-            onClose={() => setShowGate(false)}
-          />
-        )}
-
-        {/* ── Withdrawal form (post-gate unlock or admin) ── */}
-        {showWithdrawForm && gateUnlocked && (
+        {/* ── Transparent withdrawal form ── */}
+        {showWithdrawForm && (
           <section className="wal-panel">
             <h3>Request a withdrawal</h3>
             <form className="wal-form" onSubmit={submitWithdraw}>
@@ -675,6 +544,13 @@ function WalStyles() {
         font-size:.76rem; line-height:1.5;
       }
       .wal-win-note svg{ flex-shrink:0; }
+      .wal-withdrawal-note{
+        display:flex; align-items:flex-start; gap:8px;
+        padding:12px 14px; border-radius:10px;
+        background:rgba(13,166,83,.1); border:1px solid rgba(13,166,83,.28); color:#a7edbf;
+        font-size:.76rem; line-height:1.5;
+      }
+      .wal-withdrawal-note svg{ flex-shrink:0; margin-top:2px; color:#72df9a; }
 
       .wal-panel{ background:#0D1528; border:1px solid rgba(255,255,255,.08); box-shadow:0 4px 20px rgba(0,0,0,.4); border-radius:12px; padding:20px; }
       .wal-panel h3{ margin:0 0 14px; font:800 16px 'DM Sans',sans-serif; letter-spacing:-.01em; color:#FFFFFF; }

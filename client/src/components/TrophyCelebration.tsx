@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Share2, Ticket, Trophy, X } from "lucide-react";
 import type { Bet } from "@/lib/api";
-import { markBetWon } from "@/lib/withdrawalGate";
 import { pickUserField } from "@/lib/session";
 import { useSession } from "@/lib/session";
 import { currencyForCountry } from "@/lib/countries";
@@ -59,14 +58,7 @@ export default function TrophyCelebration({ bet, onClose, showConfetti = true }:
   const userCountry = pickUserField(user, "country", "countryCode", "country_code");
   const { code: currency } = currencyForCountry(userCountry);
 
-  // Record the win in the withdrawal gate so the Withdraw button unlocks
   const handleClose = () => {
-    const userId = pickUserField(user, "id", "userId", "accountId");
-    const country = (() => {
-      const raw = pickUserField(user, "country", "countryCode", "country_code");
-      return raw.toUpperCase().startsWith("NG") ? "NG" : "GH";
-    })();
-    if (userId) markBetWon(userId, country);
     onClose();
   };
 
