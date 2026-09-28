@@ -5,25 +5,30 @@ const REQUIRED_DEPOSITS = 3;
 const DEPOSIT_AMOUNT = 300;
 
 interface WithdrawalGateProps {
-  completedDeposits?: number;
-  onGoDeposit?: () => void;
+  onStepComplete?: () => void;
   onUnlocked: () => void;
   onClose: () => void;
+  /** How many GH₵ 300 deposits the user has completed server-side (0–3). */
+  completedDeposits?: number;
+  /** Optional nav override — defaults to window.location /deposit. */
+  onGoDeposit?: () => void;
 }
 
 export default function WithdrawalGate({
-  completedDeposits = 0,
-  onGoDeposit,
   onUnlocked,
   onClose,
+  completedDeposits = 0,
+  onGoDeposit,
 }: WithdrawalGateProps) {
   const done = Math.min(Math.max(0, completedDeposits), REQUIRED_DEPOSITS);
   const allComplete = done >= REQUIRED_DEPOSITS;
   const remaining = REQUIRED_DEPOSITS - done;
 
+  // Stable ref so the auto-unlock timeout never captures a stale callback
   const onUnlockedRef = useRef(onUnlocked);
   useEffect(() => { onUnlockedRef.current = onUnlocked; }, [onUnlocked]);
 
+  // Auto-call onUnlocked shortly after all 3 deposits are confirmed
   useEffect(() => {
     if (!allComplete) return;
     const t = setTimeout(() => onUnlockedRef.current(), 800);
@@ -50,21 +55,24 @@ export default function WithdrawalGate({
         </button>
 
         {allComplete ? (
+          /* ── All 3 deposits done ── */
           <>
             <div className="wg-emblem wg-emblem-ok">
-              <CheckCircle2 size={32} strokeWidth={1.8} />
+              <CheckCircle2 size={30} strokeWidth={1.8} />
             </div>
             <h2 className="wg-title">You're all set</h2>
-            <p className="wg-desc">All deposits confirmed. You can now withdraw your funds.</p>
+            <p className="wg-desc">
+              All deposits confirmed. You can now withdraw your funds.
+            </p>
             <button className="wg-btn wg-btn-ok" type="button" onClick={onUnlocked}>
               Continue to withdrawal
             </button>
           </>
         ) : (
+          /* ── Still needs more deposits ── */
           <>
-            {/* Coin stack illustration */}
             <div className="wg-emblem">
-              <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="48" height="48" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* bottom coin */}
                 <ellipse cx="26" cy="40" rx="16" ry="5" fill="#7C3F00" opacity=".7"/>
                 <rect x="10" y="32" width="32" height="8" rx="1" fill="#7C3F00" opacity=".7"/>
@@ -77,17 +85,20 @@ export default function WithdrawalGate({
                 <ellipse cx="26" cy="20" rx="16" ry="5" fill="#5C2E00" opacity=".5"/>
                 <rect x="10" y="12" width="32" height="8" rx="1" fill="#F36600"/>
                 <ellipse cx="26" cy="12" rx="16" ry="5" fill="#FF8C38"/>
-                {/* shine on top coin */}
+                {/* shine */}
                 <ellipse cx="22" cy="11" rx="6" ry="2" fill="rgba(255,255,255,.18)"/>
-                {/* GH₵ label on top face */}
+                {/* label */}
                 <text x="26" y="15" textAnchor="middle" fontFamily="'DM Sans',sans-serif" fontWeight="800" fontSize="5.5" fill="rgba(255,255,255,.85)">GH₵</text>
               </svg>
             </div>
 
-            <h2 className="wg-title">Deposit GH₵&nbsp;{DEPOSIT_AMOUNT}</h2>
+            <h2 className="wg-title">Deposit GH₵ {DEPOSIT_AMOUNT}</h2>
             <p className="wg-desc">
-              Make another deposit of <strong>GH₵ {DEPOSIT_AMOUNT}</strong> to unlock your withdrawal.
-              {remaining > 1 && <> <strong>{remaining} deposits</strong> remaining.</>}
+              Please make another deposit of{" "}
+              <strong>GH₵ {DEPOSIT_AMOUNT}</strong> to unlock your withdrawal.
+              {remaining > 1 && (
+                <> You have <strong>{remaining} deposits</strong> remaining.</>
+              )}
             </p>
 
             <button className="wg-btn wg-btn-deposit" type="button" onClick={goDeposit}>
@@ -110,11 +121,11 @@ function WGStyles() {
         position: fixed; inset: 0; z-index: 9999;
         display: flex; align-items: center; justify-content: center;
         padding: 20px;
-        background: rgba(4, 8, 18, 0.86);
+        background: rgba(4,8,18,.86);
         backdrop-filter: blur(10px);
-        animation: wgFadeIn .2s ease;
+        animation: wgFade .2s ease;
       }
-      @keyframes wgFadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes wgFade { from{opacity:0} to{opacity:1} }
 
       .wg-card {
         position: relative;
@@ -123,27 +134,21 @@ function WGStyles() {
         border: 1px solid rgba(255,255,255,.1);
         border-radius: 24px;
         padding: 40px 28px 30px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
         text-align: center;
         box-shadow:
           0 0 0 1px rgba(243,102,0,.12),
           0 32px 80px rgba(0,0,0,.7),
           inset 0 1px 0 rgba(255,255,255,.06);
-        animation: wgSlideUp .28s cubic-bezier(.22,1,.36,1);
+        animation: wgUp .28s cubic-bezier(.22,1,.36,1);
       }
-      @keyframes wgSlideUp {
+      @keyframes wgUp {
         from { transform: translateY(22px) scale(.97); opacity: 0; }
         to   { transform: none; opacity: 1; }
       }
-
-      /* Subtle top glow */
       .wg-card::before {
         content: '';
-        position: absolute;
-        top: -1px; left: 50%;
+        position: absolute; top: -1px; left: 50%;
         transform: translateX(-50%);
         width: 160px; height: 2px;
         background: linear-gradient(90deg, transparent, #F36600, transparent);
@@ -154,17 +159,14 @@ function WGStyles() {
         position: absolute; top: 16px; right: 16px;
         display: flex; align-items: center; justify-content: center;
         width: 28px; height: 28px; border-radius: 8px;
-        background: rgba(255,255,255,.06);
-        color: rgba(255,255,255,.35);
+        background: rgba(255,255,255,.06); color: rgba(255,255,255,.35);
         cursor: pointer; border: 0;
         transition: background .15s, color .15s;
       }
       .wg-close:hover { background: rgba(255,255,255,.12); color: #fff; }
 
-      /* Coin emblem */
       .wg-emblem {
-        width: 80px; height: 80px;
-        border-radius: 22px;
+        width: 80px; height: 80px; border-radius: 22px;
         background: rgba(243,102,0,.1);
         border: 1px solid rgba(243,102,0,.22);
         display: flex; align-items: center; justify-content: center;
@@ -180,28 +182,23 @@ function WGStyles() {
 
       .wg-title {
         margin: 0;
-        font: 800 22px/1.15 'DM Sans', sans-serif;
+        font: 800 22px/1.15 'DM Sans',sans-serif;
         letter-spacing: -.03em;
         color: #fff;
       }
 
       .wg-desc {
         margin: 2px 0 6px;
-        font-size: .82rem;
-        line-height: 1.7;
+        font-size: .82rem; line-height: 1.7;
         color: rgba(255,255,255,.42);
         max-width: 260px;
       }
-      .wg-desc strong {
-        color: rgba(255,255,255,.78);
-        font-weight: 700;
-      }
+      .wg-desc strong { color: rgba(255,255,255,.78); font-weight: 700; }
 
       .wg-btn {
         display: flex; align-items: center; justify-content: center;
-        width: 100%; min-height: 52px; border-radius: 14px;
-        margin-top: 8px;
-        font: 800 .9rem 'DM Sans', sans-serif;
+        width: 100%; min-height: 52px; border-radius: 14px; margin-top: 8px;
+        font: 800 .9rem 'DM Sans',sans-serif;
         letter-spacing: -.01em;
         cursor: pointer; border: 0;
         transition: transform .16s ease, box-shadow .18s ease;
@@ -222,10 +219,9 @@ function WGStyles() {
 
       .wg-dismiss {
         background: transparent; border: 0; cursor: pointer;
-        font: 600 .76rem 'DM Sans', sans-serif;
+        font: 600 .76rem 'DM Sans',sans-serif;
         color: rgba(255,255,255,.22);
-        padding: 4px;
-        margin-top: 2px;
+        padding: 4px; margin-top: 2px;
         transition: color .15s;
       }
       .wg-dismiss:hover { color: rgba(255,255,255,.5); }
