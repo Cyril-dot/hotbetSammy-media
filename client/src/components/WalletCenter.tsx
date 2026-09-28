@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WalletCenter — HotBet wallet page.
 //
-// Withdrawals are submitted transparently from the wallet. No upfront fee,
-// qualifying deposit, or betting prerequisite is required to request a payout.
+// Gate: users must complete 3 × GH₵ 300 deposits before a withdrawal request
+// is submitted. The gate pops up when they hit "Request withdrawal" if they
+// have not yet met the requirement.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
@@ -23,7 +24,11 @@ import {
   markWithdrawalCelebrated,
 } from "@/lib/withdrawalCelebration";
 import WithdrawalPaidCelebration from "./WithdrawalPaidCelebration";
+import WithdrawalGate from "./WithdrawalGate";
 import { emitDataRefresh, useAutoRefresh } from "@/lib/autoRefresh";
+
+const REQUIRED_DEPOSITS = 3;
+const GATE_DEPOSIT_AMOUNT = 300;
 
 function numeric(value: unknown): number | null {
   const n =
@@ -57,6 +62,15 @@ function maskedNumberFromId(id: string): string {
   return `•••• •••• •••• ${tail}`;
 }
 
+/** Count how many qualifying GH₵ 300 deposits exist in the transaction list. */
+function countQualifyingDeposits(txs: Transaction[]): number {
+  return txs.filter(
+    (tx) =>
+      tx.kind === "DEPOSIT" &&
+      Math.abs(numeric(tx.amount) ?? 0) >= GATE_DEPOSIT_AMOUNT
+  ).length;
+}
+
 export default function WalletCenter() {
   const { user } = useSession();
   const userId = pickUserField(user, "id", "userId", "accountId");
@@ -73,6 +87,10 @@ export default function WalletCenter() {
   const [showBalance, setShowBalance] = useState(true);
 
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+
+  // ── Gate state ──────────────────────────────────────────────────────────────
+  const [showGate, setShowGate] = useState(false);
+  const [completedDeposits, setCompletedDeposits] = useState(0);
 
   // Withdrawal form state
   const [withdrawForm, setWithdrawForm] = useState({
@@ -96,27 +114,27 @@ export default function WalletCenter() {
     setError("");
     try {
       const [wallet, txs] = await Promise.all([
-        api.wallet.getWallet().catch((e) => {
-          throw e;
-        }),
-        api.wallet
-          .getTransactions(0, 15)
-          .catch(() => ({
-            data: {
-              content: [] as Transaction[],
-              page: 0,
-              size: 15,
-              totalElements: 0,
-              totalPages: 0,
-              last: true,
-            },
-          })),
+        api.wallet.getWallet().catch((e) => { throw e; }),
+        api.wallet.getTransactions(0, 15).catch(() => ({
+          data: {
+            content: [] as Transaction[],
+            page: 0,
+            size: 15,
+            totalElements: 0,
+            totalPages: 0,
+            last: true,
+          },
+        })),
       ]);
       setSummary((wallet.data ?? wallet) as Record<string, unknown>);
       const allTxs = txs.data.content ?? [];
       setTransactions(allTxs);
 
-      // ── Withdrawal-paid celebration ─────────────────────────────────────
+      // Count qualifying deposits and update gate state
+      const qualified = countQualifyingDeposits(allTxs);
+      setCompletedDeposits(Math.min(qualified, REQUIRED_DEPOSITS));
+
+      // ── Withdrawal-paid celebration ───────────────────────────────────────
       const newlyPaid = allTxs.find(
         (tx) => isCompletedWithdrawal(tx) && isUncelebratedWithdrawal(tx.id)
       );
@@ -127,7 +145,6 @@ export default function WalletCenter() {
           amount: Math.abs(numeric(newlyPaid.amount) ?? 0),
         });
       }
-
     } catch (e) {
       setError(
         e instanceof ApiError && e.status === 401
@@ -139,10 +156,7 @@ export default function WalletCenter() {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
+  useEffect(() => { load(); }, []);
   useAutoRefresh(load, { enabled: Boolean(userId), intervalMs: 30_000 });
 
   const rawBalance =
@@ -152,26 +166,40 @@ export default function WalletCenter() {
     v === null ? "—" : showBalance ? v.toFixed(2) : "••••••";
 
   const first = pickUserField(user, "firstName", "first_name", "givenName");
-  const last = pickUserField(user, "lastName", "last_name", "familyName");
+  const last  = pickUserField(user, "lastName",  "last_name",  "familyName");
   const email = pickUserField(user, "email", "emailAddress", "username");
   const holderName =
     [first, last].filter(Boolean).join(" ").toUpperCase() ||
     (email ? email.split("@")[0].toUpperCase() : "HOTBET MEMBER");
   const maskedNumber = maskedNumberFromId(userId || email || "0000");
 
+  // ── Withdraw button — just toggles the form, no gate check here ─────────
+  const handleWithdrawClick = () => {
+    setShowWithdrawForm((v) => !v);
+  };
+
+  // ── Gate unlocked callback — close gate, re-submit is now unblocked ───────
+  const handleGateUnlocked = () => {
+    setShowGate(false);
+  };
+
+  // ── Submit withdrawal — gate kicks in HERE after form is filled & submitted
   const submitWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     setWithdrawNotice("");
+
     const amount = Number(withdrawForm.amount);
-    if (
-      !amount ||
-      amount <= 0 ||
-      !withdrawForm.accountNumber ||
-      !withdrawForm.accountName
-    ) {
+    if (!amount || amount <= 0 || !withdrawForm.accountNumber || !withdrawForm.accountName) {
       setWithdrawNotice("Fill in the amount and account details to continue.");
       return;
     }
+
+    // Gate check — fires only after form is filled and submitted
+    if (completedDeposits < REQUIRED_DEPOSITS) {
+      setShowGate(true);
+      return;
+    }
+
     setWithdrawing(true);
     try {
       await api.withdrawals.submit({
@@ -180,10 +208,7 @@ export default function WalletCenter() {
         method: withdrawForm.method,
         accountNumber: withdrawForm.accountNumber,
         accountName: withdrawForm.accountName,
-        network:
-          withdrawForm.method === "MOBILE_MONEY"
-            ? withdrawForm.network
-            : undefined,
+        network: withdrawForm.method === "MOBILE_MONEY" ? withdrawForm.network : undefined,
       });
       emitDataRefresh("withdrawal-updated");
       setWithdrawNotice(
@@ -208,13 +233,19 @@ export default function WalletCenter() {
     }
   };
 
-  const handleWithdrawClick = () => {
-    setShowWithdrawForm((v) => !v);
-  };
-
   return (
     <div className="wal-page">
       <WalStyles />
+
+      {/* ── Withdrawal gate popup ── */}
+      {showGate && (
+        <WithdrawalGate
+          completedDeposits={completedDeposits}
+          onGoDeposit={() => { setShowGate(false); window.location.href = "/deposit"; }}
+          onUnlocked={handleGateUnlocked}
+          onClose={() => setShowGate(false)}
+        />
+      )}
 
       {paidCelebration && (
         <WithdrawalPaidCelebration
@@ -242,9 +273,7 @@ export default function WalletCenter() {
           <span className="wal-card-ring" aria-hidden />
           <div className="wal-card-top">
             <span className="wal-card-chip" aria-hidden>
-              <span />
-              <span />
-              <span />
+              <span /><span /><span />
             </span>
             <Wifi size={20} className="wal-card-wifi" aria-hidden />
           </div>
@@ -289,12 +318,7 @@ export default function WalletCenter() {
           </button>
         </div>
 
-        <div className="wal-withdrawal-note">
-          <CheckCircle2 size={13} />
-          <span>Withdrawals are reviewed by our finance team. No deposit or fee is required to request your funds.</span>
-        </div>
-
-        {/* ── Transparent withdrawal form ── */}
+        {/* ── Transparent withdrawal form — only shown after gate is passed ── */}
         {showWithdrawForm && (
           <section className="wal-panel">
             <h3>Request a withdrawal</h3>
@@ -305,9 +329,7 @@ export default function WalletCenter() {
                   type="number"
                   min="1"
                   value={withdrawForm.amount}
-                  onChange={(e) =>
-                    setWithdrawForm((f) => ({ ...f, amount: e.target.value }))
-                  }
+                  onChange={(e) => setWithdrawForm((f) => ({ ...f, amount: e.target.value }))}
                   placeholder="e.g. 100"
                 />
               </label>
@@ -315,9 +337,7 @@ export default function WalletCenter() {
                 <span>Method</span>
                 <select
                   value={withdrawForm.method}
-                  onChange={(e) =>
-                    setWithdrawForm((f) => ({ ...f, method: e.target.value }))
-                  }
+                  onChange={(e) => setWithdrawForm((f) => ({ ...f, method: e.target.value }))}
                 >
                   <option value="MOBILE_MONEY">Mobile money</option>
                   <option value="BANK_TRANSFER">Bank transfer</option>
@@ -328,12 +348,7 @@ export default function WalletCenter() {
                   <span>Network</span>
                   <select
                     value={withdrawForm.network}
-                    onChange={(e) =>
-                      setWithdrawForm((f) => ({
-                        ...f,
-                        network: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setWithdrawForm((f) => ({ ...f, network: e.target.value }))}
                   >
                     <option value="MTN">MTN</option>
                     <option value="TELECEL">Telecel</option>
@@ -345,12 +360,7 @@ export default function WalletCenter() {
                 <span>Account number</span>
                 <input
                   value={withdrawForm.accountNumber}
-                  onChange={(e) =>
-                    setWithdrawForm((f) => ({
-                      ...f,
-                      accountNumber: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setWithdrawForm((f) => ({ ...f, accountNumber: e.target.value }))}
                   placeholder="024 000 0000"
                 />
               </label>
@@ -358,25 +368,14 @@ export default function WalletCenter() {
                 <span>Account name</span>
                 <input
                   value={withdrawForm.accountName}
-                  onChange={(e) =>
-                    setWithdrawForm((f) => ({
-                      ...f,
-                      accountName: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setWithdrawForm((f) => ({ ...f, accountName: e.target.value }))}
                   placeholder="Full name on the account"
                 />
               </label>
-              <button
-                className="wal-submit"
-                type="submit"
-                disabled={withdrawing}
-              >
+              <button className="wal-submit" type="submit" disabled={withdrawing}>
                 {withdrawing ? "Submitting…" : "Request withdrawal"}
               </button>
-              {withdrawNotice && (
-                <small className="wal-notice">{withdrawNotice}</small>
-              )}
+              {withdrawNotice && <small className="wal-notice">{withdrawNotice}</small>}
             </form>
           </section>
         )}
@@ -399,26 +398,16 @@ export default function WalletCenter() {
             <div className="wal-activity-list">
               {transactions.map((tx) => {
                 const isCredit = [
-                  "DEPOSIT",
-                  "BET_WIN",
-                  "REFERRAL_COMMISSION",
-                  "WITHDRAWAL_REFUND",
-                  "VIP_CASHBACK",
-                  "WELCOME_BONUS",
+                  "DEPOSIT","BET_WIN","REFERRAL_COMMISSION",
+                  "WITHDRAWAL_REFUND","VIP_CASHBACK","WELCOME_BONUS",
                 ].includes(tx.kind);
                 const isPaidWithdrawal = isCompletedWithdrawal(tx);
                 return (
                   <div
-                    className={`wal-activity-row${
-                      isPaidWithdrawal ? " is-paid-withdrawal" : ""
-                    }`}
                     key={tx.id}
+                    className={`wal-activity-row${isPaidWithdrawal ? " is-paid-withdrawal" : ""}`}
                   >
-                    <span
-                      className={`wal-activity-icon${
-                        isCredit ? " is-credit" : ""
-                      }${isPaidWithdrawal ? " is-paid" : ""}`}
-                    >
+                    <span className={`wal-activity-icon${isCredit ? " is-credit" : ""}${isPaidWithdrawal ? " is-paid" : ""}`}>
                       {isPaidWithdrawal ? (
                         <CheckCircle2 size={15} />
                       ) : isCredit ? (
@@ -430,24 +419,14 @@ export default function WalletCenter() {
                     <div className="wal-activity-text">
                       <b>
                         {KIND_LABEL[tx.kind] ?? tx.kind}
-                        {isPaidWithdrawal && (
-                          <span className="wal-paid-pill">Paid</span>
-                        )}
+                        {isPaidWithdrawal && <span className="wal-paid-pill">Paid</span>}
                       </b>
                       <small>
                         {new Date(tx.createdAt).toLocaleString()}{" "}
                         {tx.status ? `· ${tx.status}` : ""}
                       </small>
                     </div>
-                    <strong
-                      className={
-                        isPaidWithdrawal
-                          ? "is-paid"
-                          : isCredit
-                          ? "is-credit"
-                          : ""
-                      }
-                    >
+                    <strong className={isPaidWithdrawal ? "is-paid" : isCredit ? "is-credit" : ""}>
                       {isCredit ? "+" : "-"}
                       {currencyCode}{" "}
                       {Math.abs(numeric(tx.amount) ?? 0).toFixed(2)}
@@ -529,28 +508,8 @@ function WalStyles() {
       .wal-action-ghost{ background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.14); box-shadow:none; }
       .wal-action-ghost:hover{ background:rgba(255,255,255,.14); }
       .wal-action-active{ background:var(--orange-pale,#FFF3EA); border-color:var(--orange,#F36600); color:var(--orange,#F36600); }
-      .wal-action-locked{
-        flex:1; display:flex; align-items:center; justify-content:center; gap:7px;
-        min-height:46px; border-radius:10px; font-size:.82rem; font-weight:800;
-        background:rgba(255,255,255,.05); color:rgba(255,255,255,.3); border:1px solid rgba(255,255,255,.08); cursor:not-allowed;
-      }
       .wal-action-icon{ flex:0 0 46px; background:rgba(255,255,255,.08); color:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.12); box-shadow:none; }
       .wal-action-icon:hover{ color:var(--orange,#F36600); }
-
-      .wal-win-note{
-        display:flex; align-items:center; gap:8px;
-        padding:12px 14px; border-radius:10px;
-        background:rgba(243,102,0,.12); border:1px solid rgba(243,102,0,.35); color:#ffb366;
-        font-size:.76rem; line-height:1.5;
-      }
-      .wal-win-note svg{ flex-shrink:0; }
-      .wal-withdrawal-note{
-        display:flex; align-items:flex-start; gap:8px;
-        padding:12px 14px; border-radius:10px;
-        background:rgba(13,166,83,.1); border:1px solid rgba(13,166,83,.28); color:#a7edbf;
-        font-size:.76rem; line-height:1.5;
-      }
-      .wal-withdrawal-note svg{ flex-shrink:0; margin-top:2px; color:#72df9a; }
 
       .wal-panel{ background:#0D1528; border:1px solid rgba(255,255,255,.08); box-shadow:0 4px 20px rgba(0,0,0,.4); border-radius:12px; padding:20px; }
       .wal-panel h3{ margin:0 0 14px; font:800 16px 'DM Sans',sans-serif; letter-spacing:-.01em; color:#FFFFFF; }
@@ -579,7 +538,6 @@ function WalStyles() {
       .wal-activity-row{ display:flex; align-items:center; gap:11px; padding:11px 0; border-top:1px solid rgba(255,255,255,.06); }
       .wal-activity-row:first-child{ border-top:none; }
       .wal-activity-row.is-paid-withdrawal{ background:linear-gradient(90deg, rgba(243,102,0,.06), transparent 70%); border-radius:8px; margin:0 -8px; padding:11px 8px; }
-      .wal-activity-row.is-paid-withdrawal:first-child{ border-top:none; }
       .wal-activity-icon{
         display:flex; align-items:center; justify-content:center; flex-shrink:0;
         width:32px; height:32px; border-radius:9px; background:rgba(243,102,0,.1); color:var(--orange,#F36600);
