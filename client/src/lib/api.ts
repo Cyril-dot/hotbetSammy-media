@@ -952,37 +952,12 @@ export const deposits = {
   stripeIntent: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/stripe/intent", body),
 
-  /** POST /api/wallet/deposit/paystack/init */
-  paystackInit: (body: Record<string, unknown>) =>
-    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/paystack/init", body),
-
-  /** POST /api/wallet/deposit/paystack-momo/init */
-  paystackMomoInit: (body: { amount: number; phone: string; provider: "mtn" | "atl" | "vod" }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-momo/init', body),
-  /** POST /api/wallet/deposit/paystack-momo/submit-otp */
-  paystackMomoSubmitOtp: (body: { otp: string; reference: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-momo/submit-otp', body),
-  /** GET /api/wallet/deposit/paystack-momo/verify/:reference */
-  paystackMomoVerify: (reference: string) =>
-    http.get<ApiResponse<Record<string, unknown>>>(`/api/wallet/deposit/paystack-momo/verify/${encodeURIComponent(reference)}`),
-  /** POST /api/wallet/deposit/paystack-bank/init */
-  paystackBankInit: (body: { amount: number; bankCode: string; accountNumber: string; birthday?: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-bank/init', body),
-  /** POST /api/wallet/deposit/paystack-bank/submit-otp */
-  paystackBankSubmitOtp: (body: { otp: string; reference: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-bank/submit-otp', body),
-  /** POST /api/wallet/deposit/paystack-bank/submit-birthday */
-  paystackBankSubmitBirthday: (body: { birthday: string; reference: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-bank/submit-birthday', body),
-  /** GET /api/wallet/deposit/paystack-bank/verify/:reference */
-  paystackBankVerify: (reference: string) =>
-    http.get<ApiResponse<Record<string, unknown>>>(`/api/wallet/deposit/paystack-bank/verify/${encodeURIComponent(reference)}`),
-  /** POST /api/wallet/deposit/paystack-card/init */
-  paystackCardInit: (body: { amount: number }) =>
-    http.post<ApiResponse<Record<string, unknown>>>('/api/wallet/deposit/paystack-card/init', body),
-  /** GET /api/wallet/deposit/paystack-card/verify/:reference */
-  paystackCardVerify: (reference: string) =>
-    http.get<ApiResponse<Record<string, unknown>>>(`/api/wallet/deposit/paystack-card/verify/${encodeURIComponent(reference)}`),
+  /** POST /api/wallet/deposit/flutterwave/gh/v4/init — Flutterwave v4 Ghana MoMo prompt (replaced Paystack 2026-10-15) */
+  ghInit: (body: { amount: number; phoneNumber: string; network: string }) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/flutterwave/gh/v4/init", body),
+  /** POST /api/wallet/deposit/flutterwave/gh/v4/verify { txRef } */
+  ghVerify: (txRef: string) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/flutterwave/gh/v4/verify", { txRef }),
 
   /** POST /api/wallet/deposit/bank */
   bankDeposit: (body: Record<string, unknown>) =>
