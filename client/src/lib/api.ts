@@ -952,12 +952,18 @@ export const deposits = {
   stripeIntent: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/stripe/intent", body),
 
-  /** POST /api/wallet/deposit/flutterwave/gh/v4/init — Flutterwave v4 Ghana MoMo prompt (replaced Paystack 2026-10-15) */
-  ghInit: (body: { amount: number; phoneNumber: string; network: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/flutterwave/gh/v4/init", body),
-  /** POST /api/wallet/deposit/flutterwave/gh/v4/verify { txRef } */
-  ghVerify: (txRef: string) =>
-    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/flutterwave/gh/v4/verify", { txRef }),
+  /** POST /api/wallet/bank-deposits — MANUAL MoMo deposit submission
+      (owner direction 2026-10-19: Flutterwave removed). The player sends
+      MoMo to the HotBet number on the Deposit page, then submits the
+      transfer details; the record lands PENDING for admin review in the
+      Bank + MoMo deposits queue, and approval credits the wallet. */
+  manualSubmit: (body: { transferReference: string; ngnAmountSent: number; expectedNgnCredit: number; senderAccountName?: string; screenshotUrl?: string; userNote?: string }) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/bank-deposits", body),
+  /** GET /api/wallet/bank-deposits — the player's own manual submissions */
+  myManualDeposits: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(
+      `/api/wallet/bank-deposits${qs({ page, size })}`
+    ),
 
   /** POST /api/wallet/deposit/bank */
   bankDeposit: (body: Record<string, unknown>) =>
