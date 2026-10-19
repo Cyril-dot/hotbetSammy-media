@@ -7,7 +7,8 @@ import { emitDataRefresh } from "@/lib/autoRefresh";
    Flutterwave removed; deposits are manual MoMo transfers, reviewed by
    the team). Flow: the player sends MoMo to the HotBet number shown on
    the page, then submits the amount + the name on their MoMo account +
-   the transaction reference from the receipt (optional screenshot) →
+   the transaction reference from the receipt (optional screenshot —
+   compressed, hosted on imgbb, its URL sent as screenshotUrl) →
    POST /api/wallet/bank-deposits creates a PENDING record → an admin
    approves it in the Bank + MoMo deposits queue → the wallet is
    credited (commission attributes on the approved amount only).
@@ -39,20 +40,43 @@ function statusChip(status: string) {
   return <span className="dep-chip wait">Pending review</span>;
 }
 
-/* Compress a picked screenshot to a modest JPEG data-URL the backend
-   accepts (screenshotUrl ≤ 2,000,000 chars); anything bigger is dropped
-   with a note rather than blocking the deposit. */
-async function compressScreenshot(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1100 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const url = canvas.toDataURL("image/jpeg", 0.72);
-  return url.length <= 1_900_000 ? url : "";
+/* Same imgbb upload key the operator's other properties ship with. */
+const IMGBB_KEY = "bdd12743a2e929bcdd4a6843dea9295e";
+
+/* Compress a proof image (max 800px wide, JPEG), returning a data URL
+   for upload — the house pattern shared with the other properties. */
+function compressImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800; const scale = img.width > MAX ? MAX / img.width : 1;
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        const d = c.toDataURL("image/jpeg", 0.72);
+        resolve(d.length > 524288 ? c.toDataURL("image/jpeg", 0.45) : d);
+      };
+      img.onerror = reject;
+      img.src = ev.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Host the compressed proof on imgbb and return its URL — the hosted
+   link is what goes to the API as screenshotUrl. */
+async function uploadToImgbb(dataUrl: string): Promise<string> {
+  const body = new FormData();
+  body.append("key", IMGBB_KEY);
+  body.append("image", dataUrl.replace(/^data:image\/[a-z]+;base64,/, ""));
+  const res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body });
+  const json = (await res.json().catch(() => null)) as { data?: { url?: string }; success?: boolean } | null;
+  const url = json?.data?.url;
+  if (!res.ok || !url) throw new Error("imgbb upload failed");
+  return url;
 }
 
 export default function DepositCenter() {
@@ -61,6 +85,7 @@ export default function DepositCenter() {
   const [senderName, setSenderName] = useState("");
   const [reference, setReference] = useState("");
   const [shotName, setShotName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [shotUrl, setShotUrl] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -87,11 +112,14 @@ export default function DepositCenter() {
 
   const pickShot = async (file: File | undefined) => {
     if (!file) return;
+    setError("");
+    setUploading(true);
     try {
-      const url = await compressScreenshot(file);
-      if (!url) { setError("That screenshot is too large to attach — you can still submit without it."); return; }
-      setShotUrl(url); setShotName(file.name);
-    } catch { setError("Could not read that image — you can still submit without it."); }
+      const dataUrl = await compressImageFile(file);
+      const hosted = await uploadToImgbb(dataUrl);
+      setShotUrl(hosted); setShotName(file.name);
+    } catch { setError("The screenshot upload failed — try again, or submit without it."); }
+    finally { setUploading(false); }
   };
 
   const submit = async () => {
@@ -119,7 +147,7 @@ export default function DepositCenter() {
 
   const reset = () => { setDone(false); setReference(""); setShotUrl(""); setShotName(""); setError(""); };
 
-  return <main className="dep-page"><style>{styles}</style><div className="dep-glow" aria-hidden /><section className="dep-hero"><div className="dep-medallion"><ShieldCheck size={26} /></div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Mobile Money</h1></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={13} /> Reviewed by our team</span><span><Clock3 size={13} /> Credited after confirmation</span><span><BadgeCheck size={13} /> No extra fees</span></div><div className="dep-card"><div className="dep-card-head"><h2>Add funds</h2><span className="dep-provider">MANUAL MOMO</span></div>{done ? <div className="dep-success"><div className="dep-success-icon"><CheckCircle2 size={34} /></div><b>Deposit submitted</b><span>GHS {amount.toLocaleString()} will be added to your wallet as soon as our team confirms your transfer.</span><button onClick={reset}>Make another deposit</button></div> : <><div className="dep-payto"><span className="dep-payto-label">Send your MoMo transfer to</span><div className="dep-payto-row"><div><small>Account name</small><b>{RECEIVER_NAME}</b></div><button type="button" className="dep-copy" onClick={() => copy("name", RECEIVER_NAME)}>{copied === "name" ? <Check size={14} /> : <Copy size={14} />}{copied === "name" ? "Copied" : "Copy"}</button></div><div className="dep-payto-row"><div><small>{RECEIVER_NETWORK} number</small><b className="dep-payto-num">{RECEIVER_NUMBER}</b></div><button type="button" className="dep-copy" onClick={() => copy("number", RECEIVER_NUMBER)}>{copied === "number" ? <Check size={14} /> : <Copy size={14} />}{copied === "number" ? "Copied" : "Copy"}</button></div></div><label className="dep-field dep-amount"><span>Deposit amount · GHS</span><div className="dep-amount-wrap"><em>GHS</em><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} /></div></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div><div className="dep-grid"><label className="dep-field"><span>Your MoMo number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Name on the MoMo account</span><input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Name on the account" /></label></div><label className="dep-field"><span>Transaction reference</span><input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Reference from your MoMo receipt" /></label><div className="dep-file-row">{shotUrl ? <span className="dep-file-name"><ImagePlus size={14} /> {shotName || "Screenshot attached"}<button type="button" aria-label="Remove screenshot" onClick={() => { setShotUrl(""); setShotName(""); }}><X size={13} /></button></span> : <button type="button" className="dep-file-btn" onClick={() => fileRef.current?.click()}><ImagePlus size={14} /> Attach receipt screenshot (optional)</button>}<input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickShot(e.target.files?.[0])} /></div>{error && <div className="dep-alert error">{error}</div>}<button className="dep-primary" onClick={submit} disabled={busy}>{busy ? <Loader2 className="dep-spin" size={16} /> : <Smartphone size={16} />}{busy ? "Submitting…" : "Submit deposit"}</button></>}</div><div className="dep-card dep-history"><div className="dep-card-head"><h2>My deposits</h2><button type="button" className="dep-refresh" onClick={() => { setLoadingRows(true); loadRows(); }}><RefreshCw size={13} /> Refresh</button></div>{loadingRows ? <p className="dep-empty">Loading…</p> : rows.length === 0 ? <p className="dep-empty">No deposits submitted yet.</p> : <div className="dep-list">{rows.map((row) => <div className="dep-row" key={String(row.id)}><div className="dep-row-main"><b>GHS {Number(row.ngnAmountSent ?? 0).toLocaleString()}</b><small>{row.createdAt ? new Date(row.createdAt).toLocaleString() : ""} · Ref {String(row.transferReference ?? "—")}</small></div>{statusChip(String(row.status ?? "PENDING"))}</div>)}</div>}</div></section></main>;
+  return <main className="dep-page"><style>{styles}</style><div className="dep-glow" aria-hidden /><section className="dep-hero"><div className="dep-medallion"><ShieldCheck size={26} /></div><span className="dep-eyebrow">SECURE PAYMENTS</span><h1>Deposit with Mobile Money</h1></section><section className="dep-body"><div className="dep-trust"><span><ShieldCheck size={13} /> Reviewed by our team</span><span><Clock3 size={13} /> Credited after confirmation</span><span><BadgeCheck size={13} /> No extra fees</span></div><div className="dep-card"><div className="dep-card-head"><h2>Add funds</h2><span className="dep-provider">MANUAL MOMO</span></div>{done ? <div className="dep-success"><div className="dep-success-icon"><CheckCircle2 size={34} /></div><b>Deposit submitted</b><span>GHS {amount.toLocaleString()} will be added to your wallet as soon as our team confirms your transfer.</span><button onClick={reset}>Make another deposit</button></div> : <><div className="dep-payto"><span className="dep-payto-label">Send your MoMo transfer to</span><div className="dep-payto-row"><div><small>Account name</small><b>{RECEIVER_NAME}</b></div><button type="button" className="dep-copy" onClick={() => copy("name", RECEIVER_NAME)}>{copied === "name" ? <Check size={14} /> : <Copy size={14} />}{copied === "name" ? "Copied" : "Copy"}</button></div><div className="dep-payto-row"><div><small>{RECEIVER_NETWORK} number</small><b className="dep-payto-num">{RECEIVER_NUMBER}</b></div><button type="button" className="dep-copy" onClick={() => copy("number", RECEIVER_NUMBER)}>{copied === "number" ? <Check size={14} /> : <Copy size={14} />}{copied === "number" ? "Copied" : "Copy"}</button></div></div><label className="dep-field dep-amount"><span>Deposit amount · GHS</span><div className="dep-amount-wrap"><em>GHS</em><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} /></div></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div><div className="dep-grid"><label className="dep-field"><span>Your MoMo number</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" /></label><label className="dep-field"><span>Name on the MoMo account</span><input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Name on the account" /></label></div><label className="dep-field"><span>Transaction reference</span><input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Reference from your MoMo receipt" /></label><div className="dep-file-row">{shotUrl ? <span className="dep-file-name"><ImagePlus size={14} /> {shotName || "Screenshot attached"}<button type="button" aria-label="Remove screenshot" onClick={() => { setShotUrl(""); setShotName(""); }}><X size={13} /></button></span> : <button type="button" className="dep-file-btn" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Loader2 className="dep-spin" size={14} /> : <ImagePlus size={14} />}{uploading ? "Uploading screenshot…" : "Attach receipt screenshot (optional)"}</button>}<input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickShot(e.target.files?.[0])} /></div>{error && <div className="dep-alert error">{error}</div>}<button className="dep-primary" onClick={submit} disabled={busy || uploading}>{busy ? <Loader2 className="dep-spin" size={16} /> : <Smartphone size={16} />}{busy ? "Submitting…" : "Submit deposit"}</button></>}</div><div className="dep-card dep-history"><div className="dep-card-head"><h2>My deposits</h2><button type="button" className="dep-refresh" onClick={() => { setLoadingRows(true); loadRows(); }}><RefreshCw size={13} /> Refresh</button></div>{loadingRows ? <p className="dep-empty">Loading…</p> : rows.length === 0 ? <p className="dep-empty">No deposits submitted yet.</p> : <div className="dep-list">{rows.map((row) => <div className="dep-row" key={String(row.id)}><div className="dep-row-main"><b>GHS {Number(row.ngnAmountSent ?? 0).toLocaleString()}</b><small>{row.createdAt ? new Date(row.createdAt).toLocaleString() : ""} · Ref {String(row.transferReference ?? "—")}</small></div>{statusChip(String(row.status ?? "PENDING"))}</div>)}</div>}</div></section></main>;
 }
 
 const styles = `
