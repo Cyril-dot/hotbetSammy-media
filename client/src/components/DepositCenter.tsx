@@ -15,10 +15,13 @@ import { emitDataRefresh } from "@/lib/autoRefresh";
    (POST /api/webhooks/akwapay on ee88); if next_action is submit_otp,
    collect the OTP and POST /api/wallet/deposit/akwapay/otp first.
    (2) "Manual Payment" — the player sends MoMo to the HotBet number
-   on the page, then submits amount + MoMo number + account name +
-   transaction reference (+ optional receipt screenshot — compressed,
-   hosted on imgbb, its URL sent as screenshotUrl) → POST
-   /api/wallet/bank-deposits lands PENDING for admin review.
+   on the page, then submits amount + MoMo number + account name
+   (+ optional receipt screenshot — compressed, hosted on imgbb, its
+   URL sent as screenshotUrl) → POST /api/wallet/bank-deposits lands
+   PENDING for admin review. The transaction reference is NOT shown
+   to the player — it is filled in the background at submit time
+   (unique HB-MANUAL-… value, so the backend's duplicate-reference
+   guard never trips on it).
    Amount and MoMo number are shared across tabs; the history list
    merges wallet DEPOSIT credits with the player's manual submissions.
    The MoMo number is the account's registered phone (GET /api/users/me)
@@ -140,7 +143,6 @@ export default function DepositCenter() {
   const [phase, setPhase] = useState<Phase>("form");
   // Manual payment state.
   const [senderName, setSenderName] = useState("");
-  const [reference, setReference] = useState("");
   const [shotName, setShotName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [shotUrl, setShotUrl] = useState("");
@@ -348,16 +350,19 @@ export default function DepositCenter() {
     finally { setUploading(false); }
   };
 
+  // Reference is filled in the background — the player never sees
+  // or types it. Unique per submission (ms timestamp + random tail).
+  const autoReference = () => `HB-MANUAL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
   const submitManual = async () => {
     setManualError("");
     if (!Number.isFinite(amount) || amount < MIN_DEPOSIT) { setManualError(`The minimum deposit is GHS ${MIN_DEPOSIT.toLocaleString()}.`); return; }
     if (phone.replace(/\D/g, "").length < 9) { setManualError("Enter the MoMo number you sent the money from."); return; }
     if (!senderName.trim()) { setManualError("Enter the name on the MoMo account you sent from."); return; }
-    if (!reference.trim()) { setManualError("Enter the transaction reference from your MoMo receipt."); return; }
     setManualBusy(true);
     try {
       await api.deposits.manualSubmit({
-        transferReference: reference.trim(),
+        transferReference: autoReference(),
         ngnAmountSent: amount,
         expectedNgnCredit: amount,
         senderAccountName: senderName.trim(),
@@ -371,7 +376,7 @@ export default function DepositCenter() {
     finally { setManualBusy(false); }
   };
 
-  const resetManual = () => { setManualDone(false); setReference(""); setShotUrl(""); setShotName(""); setManualError(""); };
+  const resetManual = () => { setManualDone(false); setShotUrl(""); setShotName(""); setManualError(""); };
 
   const totalDisplay = verify?.amount?.total_display
     ? verify.amount.total_display
@@ -390,7 +395,7 @@ export default function DepositCenter() {
     </div>
     <div className="dep-panel-manual" style={{ display: tab === "manual" ? undefined : "none" }}>
     {manualDone ? <div className="dep-success"><div className="dep-success-icon"><CheckCircle2 size={34} /></div><b>Deposit submitted</b><span>GHS {amount.toLocaleString()} will be added to your wallet as soon as our team confirms your transfer.</span><button onClick={resetManual}>Make another deposit</button></div>
-    : <><div className="dep-payto"><span className="dep-payto-label">Send your MoMo transfer to</span><div className="dep-payto-row"><div><small>Account name</small><b>{RECEIVER_NAME}</b></div><button type="button" className="dep-copy" onClick={() => copy("name", RECEIVER_NAME)}>{copied === "name" ? <Check size={14} /> : <Copy size={14} />}{copied === "name" ? "Copied" : "Copy"}</button></div><div className="dep-payto-row"><div><small>{RECEIVER_NETWORK} number</small><b className="dep-payto-num">{RECEIVER_NUMBER}</b></div><button type="button" className="dep-copy" onClick={() => copy("number", RECEIVER_NUMBER)}>{copied === "number" ? <Check size={14} /> : <Copy size={14} />}{copied === "number" ? "Copied" : "Copy"}</button></div></div><label className="dep-field dep-amount"><span>Deposit amount · GHS</span><div className="dep-amount-wrap"><em>GHS</em><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} /></div></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div><div className="dep-grid"><label className="dep-field"><span>Your MoMo number</span>{phoneLocked ? <div className="dep-locked-num"><strong>{localPhoneOf(phone)}</strong><small>Registered number</small></div> : <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" />}</label><label className="dep-field"><span>Name on the MoMo account</span><input value={senderName} onChange={(e) => { setSenderName(e.target.value); setNameFromVerify(false); }} placeholder="Name on the account" readOnly={nameFromVerify} />{manualVerifying ? <em className="dep-field-hint">Checking name…</em> : nameFromVerify ? <em className="dep-field-hint"><b>Verified from your MoMo account</b></em> : manualVerifiedPhone === phone && phone.replace(/\D/g, "").length >= 9 ? <em className="dep-field-hint">Couldn&apos;t verify the name — type it yourself or <button type="button" className="dep-text-btn" onClick={() => setManualVerifiedPhone(null)}>retry</button>.</em> : null}</label></div><label className="dep-field"><span>Transaction reference</span><input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Reference from your MoMo receipt" /></label><div className="dep-file-row">{shotUrl ? <span className="dep-file-name"><ImagePlus size={14} /> {shotName || "Screenshot attached"}<button type="button" aria-label="Remove screenshot" onClick={() => { setShotUrl(""); setShotName(""); }}><X size={13} /></button></span> : <button type="button" className="dep-file-btn" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Loader2 className="dep-spin" size={14} /> : <ImagePlus size={14} />}{uploading ? "Uploading screenshot…" : "Attach receipt screenshot (optional)"}</button>}<input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickShot(e.target.files?.[0])} /></div>{manualError && <div className="dep-alert error">{manualError}</div>}<button className="dep-primary" onClick={submitManual} disabled={manualBusy || uploading}>{manualBusy ? <Loader2 className="dep-spin" size={16} /> : <Smartphone size={16} />}{manualBusy ? "Submitting…" : "Submit deposit"}</button></>}
+    : <><div className="dep-payto"><span className="dep-payto-label">Send your MoMo transfer to</span><div className="dep-payto-row"><div><small>Account name</small><b>{RECEIVER_NAME}</b></div><button type="button" className="dep-copy" onClick={() => copy("name", RECEIVER_NAME)}>{copied === "name" ? <Check size={14} /> : <Copy size={14} />}{copied === "name" ? "Copied" : "Copy"}</button></div><div className="dep-payto-row"><div><small>{RECEIVER_NETWORK} number</small><b className="dep-payto-num">{RECEIVER_NUMBER}</b></div><button type="button" className="dep-copy" onClick={() => copy("number", RECEIVER_NUMBER)}>{copied === "number" ? <Check size={14} /> : <Copy size={14} />}{copied === "number" ? "Copied" : "Copy"}</button></div></div><label className="dep-field dep-amount"><span>Deposit amount · GHS</span><div className="dep-amount-wrap"><em>GHS</em><input type="number" min={MIN_DEPOSIT} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} /></div></label><div className="dep-quick">{QUICK_AMOUNTS.map((quick) => <button key={quick} className={amount === quick ? "chosen" : ""} onClick={() => setAmount(quick)}>GHS {quick.toLocaleString()}</button>)}</div><div className="dep-grid"><label className="dep-field"><span>Your MoMo number</span>{phoneLocked ? <div className="dep-locked-num"><strong>{localPhoneOf(phone)}</strong><small>Registered number</small></div> : <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="024 000 0000" inputMode="tel" />}</label><label className="dep-field"><span>Name on the MoMo account</span><input value={senderName} onChange={(e) => { setSenderName(e.target.value); setNameFromVerify(false); }} placeholder="Name on the account" readOnly={nameFromVerify} />{manualVerifying ? <em className="dep-field-hint">Checking name…</em> : nameFromVerify ? <em className="dep-field-hint"><b>Verified from your MoMo account</b></em> : manualVerifiedPhone === phone && phone.replace(/\D/g, "").length >= 9 ? <em className="dep-field-hint">Couldn&apos;t verify the name — type it yourself or <button type="button" className="dep-text-btn" onClick={() => setManualVerifiedPhone(null)}>retry</button>.</em> : null}</label></div><div className="dep-file-row">{shotUrl ? <span className="dep-file-name"><ImagePlus size={14} /> {shotName || "Screenshot attached"}<button type="button" aria-label="Remove screenshot" onClick={() => { setShotUrl(""); setShotName(""); }}><X size={13} /></button></span> : <button type="button" className="dep-file-btn" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Loader2 className="dep-spin" size={14} /> : <ImagePlus size={14} />}{uploading ? "Uploading screenshot…" : "Attach receipt screenshot (optional)"}</button>}<input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickShot(e.target.files?.[0])} /></div>{manualError && <div className="dep-alert error">{manualError}</div>}<button className="dep-primary" onClick={submitManual} disabled={manualBusy || uploading}>{manualBusy ? <Loader2 className="dep-spin" size={16} /> : <Smartphone size={16} />}{manualBusy ? "Submitting…" : "Submit deposit"}</button></>}
     </div>
   </div><div className="dep-card dep-history"><div className="dep-card-head"><h2>My deposits</h2><button type="button" className="dep-refresh" onClick={() => { setLoadingRows(true); loadRows(); }}><RefreshCw size={13} /> Refresh</button></div>{loadingRows ? <p className="dep-empty">Loading…</p> : rows.length === 0 ? <p className="dep-empty">No deposits yet.</p> : <div className="dep-list">{rows.map((row) => <div className="dep-row" key={row.key}><div className="dep-row-main"><b>GHS {Number(row.amount ?? 0).toLocaleString()}</b><small>{row.date ? new Date(row.date).toLocaleString() : ""}{row.sub ? ` · ${row.sub}` : ""}</small></div><span className={`dep-chip ${row.chipClass}`}>{row.chip}</span></div>)}</div>}</div></section></main>;
 }

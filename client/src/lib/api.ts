@@ -3194,8 +3194,13 @@ export const superAdminDeposits = {
   binance: (page = 0, size = 50, pending = false) => http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(`/api/admin/binance-deposits${pending ? "/pending" : ""}${qs({ page, size })}`),
   bank: (page = 0, size = 50, pending = false) => http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(`/api/admin/bank-deposits${pending ? "/pending" : ""}${qs({ page, size, sort: "createdAt,desc" })}`),
   simple: (page = 0, size = 50, pending = false) => http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(`/api/admin/simple-deposits${pending ? "/pending" : ""}${qs({ page, size })}`),
-  approve: (kind: "binance" | "bank" | "simple", id: string) => http.post<ApiResponse<Record<string, unknown>>>(`/api/admin/${kind === "binance" ? "binance" : kind}-deposits/${encodeURIComponent(id)}/approve`),
-  reject: (kind: "binance" | "bank" | "simple", id: string, body: { reason?: string }) => http.post<ApiResponse<Record<string, unknown>>>(`/api/admin/${kind === "binance" ? "binance" : kind}-deposits/${encodeURIComponent(id)}/reject`, body),
+  // Approve REQUIRES a body — each queue's ApproveRequest has its
+  // own @NotNull amount field (bank: creditedNgnAmount, binance:
+  // creditedGhsAmount, simple: creditedAmount). Sending no body used
+  // to fail with the backend's generic 500 "An internal error
+  // occurred". Reject likewise requires adminNote (not "reason").
+  approve: (kind: "binance" | "bank" | "simple", id: string, body: { creditedNgnAmount?: number; creditedGhsAmount?: number; creditedAmount?: number; adminNote?: string }) => http.post<ApiResponse<Record<string, unknown>>>(`/api/admin/${kind === "binance" ? "binance" : kind}-deposits/${encodeURIComponent(id)}/approve`, body),
+  reject: (kind: "binance" | "bank" | "simple", id: string, body: { adminNote?: string }) => http.post<ApiResponse<Record<string, unknown>>>(`/api/admin/${kind === "binance" ? "binance" : kind}-deposits/${encodeURIComponent(id)}/reject`, body),
 };
 export const superAdminWithdrawals = {
   list: (page = 0, size = 50) => http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(`/api/wallet/withdrawals/admin/all${qs({ page, size })}`),
