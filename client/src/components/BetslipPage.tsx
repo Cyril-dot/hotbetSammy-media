@@ -264,6 +264,11 @@ export default function BetslipPage({
   const totalOdds = picks.reduce((a, p) => a * p.odd, 1);
   const potentialReturn = stake * totalOdds;
   const stakeInvalid = stake < MIN_STAKE || stake > MAX_STAKE || (balance !== null && stake > balance);
+  // A disabled Place Bet with no explanation reads as a broken button, so
+  // the reason is always shown underneath it while the stake is invalid.
+  const stakeInvalidReason = !stakeInvalid ? "" : balance !== null && stake > balance
+    ? "Stake exceeds your available balance."
+    : `Stake must be between ${curr} ${MIN_STAKE.toLocaleString()} and ${curr} ${MAX_STAKE.toLocaleString()}.`;
 
   const remove = (pick: Pick) => setPicks(picks.filter((p) => !(p.id === pick.id && p.selection === pick.selection && p.market === pick.market)));
 
@@ -325,6 +330,7 @@ export default function BetslipPage({
             <div className="bp-stake-hint">Min {curr} {MIN_STAKE.toLocaleString()} · Max {curr} {MAX_STAKE.toLocaleString()}{balance !== null && ` · Balance ${curr} ${balance.toFixed(2)}`}</div>
             <div className="bp-summary-row highlight"><span>Potential return</span><b>{curr} {potentialReturn.toFixed(2)}</b></div>
             <button className="gold-button full" onClick={place} disabled={placing || stakeInvalid}>{placing ? "Placing…" : "Place Bet"}</button>
+            {stakeInvalidReason && !placing && <small className="auth-notice">{stakeInvalidReason}</small>}
             {notice && <small className={notice.type === "error" ? "auth-notice" : "auth-notice bp-success"}>{notice.text}</small>}
           </aside>
         </div>
