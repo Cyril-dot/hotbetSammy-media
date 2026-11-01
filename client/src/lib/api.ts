@@ -729,6 +729,32 @@ export interface AkwaPayOtpRequest {
   otp: string;
 }
 
+/**
+ * Verify-first response for POST /api/wallet/deposit/akwapay/verify
+ * (mirrors the other skins' ShinobiPay verify envelope). Only
+ * verified:true approves sending the prompt; no_account means do not
+ * send; unavailable means wait and retry. The endpoint never sends a
+ * prompt and never auto-retries (each check burns provider quota).
+ */
+export interface AkwaPayVerifyAmount {
+  requested_minor?: number;
+  customer_fee_minor?: number;
+  total_minor?: number;
+  total_display?: string;
+  currency?: string;
+}
+export interface AkwaPayVerifyResponse {
+  verified?: boolean;
+  account_name?: string | null;
+  can_prompt?: boolean;
+  phone?: string;
+  network?: string;
+  amount?: AkwaPayVerifyAmount | null;
+  reason?: "ok" | "no_account" | "unavailable" | "not_configured" | "error";
+  message?: string | null;
+  [key: string]: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // Paginated response wrappers
 // ---------------------------------------------------------------------------
@@ -952,19 +978,6 @@ export const deposits = {
   stripeIntent: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/stripe/intent", body),
 
-  /** POST /api/wallet/bank-deposits — MANUAL MoMo deposit submission
-      (owner direction 2026-10-19: Flutterwave removed). The player sends
-      MoMo to the HotBet number on the Deposit page, then submits the
-      transfer details; the record lands PENDING for admin review in the
-      Bank + MoMo deposits queue, and approval credits the wallet. */
-  manualSubmit: (body: { transferReference: string; ngnAmountSent: number; expectedNgnCredit: number; senderAccountName?: string; screenshotUrl?: string; userNote?: string }) =>
-    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/bank-deposits", body),
-  /** GET /api/wallet/bank-deposits — the player's own manual submissions */
-  myManualDeposits: (page = 0, size = 20) =>
-    http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(
-      `/api/wallet/bank-deposits${qs({ page, size })}`
-    ),
-
   /** POST /api/wallet/deposit/bank */
   bankDeposit: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/bank", body),
@@ -1009,6 +1022,18 @@ export const deposits = {
    */
   akwapaySubmitOtp: (body: AkwaPayOtpRequest) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/akwapay/otp", body),
+
+  /**
+   * POST /api/wallet/deposit/akwapay/verify — verify-first (opt-in).
+   *
+   * Verifies a MoMo number BEFORE any prompt goes out. Only
+   * verified:true approves calling akwapayInit(); no_account means do
+   * not send; unavailable means wait and retry. Never sends a prompt,
+   * creates no intent, and must never be auto-retried (each check burns
+   * the provider's daily quota — verify once per attempt and reuse).
+   */
+  akwapayVerify: (body: { amount: number; phone: string; network: AkwaPayNetwork }) =>
+    http.post<ApiResponse<AkwaPayVerifyResponse>>("/api/wallet/deposit/akwapay/verify", body),
 
   // ── Binance / Crypto deposits ─────────────────────────────────────────────
 
