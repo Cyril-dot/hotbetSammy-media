@@ -211,9 +211,6 @@ export default function WalletCenter() {
         network: withdrawForm.method === "MOBILE_MONEY" ? withdrawForm.network : undefined,
       });
       emitDataRefresh("withdrawal-updated");
-      setWithdrawNotice(
-        "Withdrawal request submitted. It will appear in your history once reviewed."
-      );
       setWithdrawForm({
         amount: "",
         method: "MOBILE_MONEY",
@@ -221,6 +218,24 @@ export default function WalletCenter() {
         accountName: "",
         network: "MTN",
       });
+      // Show the deduction at placement: refetch the wallet and put the
+      // new balance in the confirmation, so the user sees the amount left
+      // the balance the moment the request was placed. (The backend
+      // deducts in the same transaction as the request; this only proves
+      // it on screen. Balance stays hidden here when the user hid it.)
+      let notice =
+        "Withdrawal request submitted. It will appear in your history once reviewed.";
+      try {
+        const w = await api.wallet.getWallet();
+        const payload = (w.data ?? w) as Record<string, unknown>;
+        const fresh = numeric(payload?.balance ?? payload?.availableBalance);
+        if (fresh !== null && Number.isFinite(fresh) && showBalance) {
+          notice = `Withdrawal request submitted. New balance: ${currencyCode} ${fresh.toFixed(2)}. It will appear in your history once reviewed.`;
+        }
+      } catch {
+        // Keep the default notice; load() below still refreshes the card.
+      }
+      setWithdrawNotice(notice);
       load();
     } catch (e) {
       setWithdrawNotice(
