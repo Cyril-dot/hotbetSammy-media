@@ -92,9 +92,6 @@ export default function BookingCodePage() {
   const userCountry = pickUserField(user, "country", "countryCode", "country_code");
   const { code: currency } = currencyForCountry(userCountry);
   const MIN_STAKE = currency === "NGN" ? 13000 : 1;
-  const QUICK_STAKES = currency === "NGN"
-    ? [13000, 20000, 50000, 100000]
-    : [1, 5, 10, 20, 50];
 
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
@@ -388,20 +385,6 @@ export default function BookingCodePage() {
                 placeholder={`Min ${currency} ${MIN_STAKE.toLocaleString()}`}
                 style={{ padding:"11px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text)", fontSize:15, fontWeight:700, outline:"none", width:"100%", boxSizing:"border-box" as const }}
               />
-              <div className="booking-code-quick-stakes" style={{ display:"flex", gap:7, flexWrap:"wrap" as const }}>
-                {QUICK_STAKES.map(q => (
-                  <button
-                    className="booking-code-quick-stake"
-                    key={q} type="button"
-                    onClick={() => { setStake(String(q)); setPlaceError(""); }}
-                    style={{ padding:"6px 13px", borderRadius:999, border:"1px solid var(--border)", background: stake === String(q) ? "var(--orange,#F36600)" : "#f3f4f6", color: stake === String(q) ? "#fff" : "#5f6673", fontSize:12, fontWeight:700, cursor:"pointer" }}
-                  >
-                    {currency === "NGN"
-                      ? (q >= 1000 ? `₦${q/1000}k` : `₦${q}`)
-                      : `GHS ${q}`}
-                  </button>
-                ))}
-              </div>
               <div className="booking-code-return" style={{ fontSize:11, color:"var(--muted)" }}>
                 Potential return: <strong style={{ color:"var(--orange,#F36600)" }}>
                   {stake && !isNaN(parseFloat(stake))
@@ -477,9 +460,6 @@ export default function BookingCodePage() {
         .booking-code-selection-odds{ white-space:nowrap; }
         .booking-code-total{ gap:12px; align-items:center; }
         .booking-code-stake-input{ box-sizing:border-box; }
-        .booking-code-quick-stakes{ margin-top:2px; }
-        .booking-code-quick-stake{ min-height:32px; transition:transform .15s ease, background .15s ease; }
-        .booking-code-quick-stake:active{ transform:scale(.97); }
         .booking-code-place-button{ min-height:44px; }
         .booking-code-success{ line-height:1.4; text-align:center; }
         .booking-code-info{ max-width:420px; margin:20px auto 0; }
