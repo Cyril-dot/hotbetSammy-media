@@ -315,6 +315,13 @@ function InlineBetslip({ picks, setPicks, onPlace, curr, adminBookingCode, admin
   const totalOdds = picks.reduce((a, p) => a * p.odd, 1);
   const potentialReturn = stake * totalOdds;
   const stakeInvalid = stake < MIN_STAKE || stake > MAX_STAKE || (balance !== null && stake > balance);
+  // A disabled Place Bet with no explanation reads as a broken button, so
+  // the reason is always shown underneath it while the stake is invalid.
+  // (The submit guard already used this wording; the button's disabled
+  // state previously never surfaced it.)
+  const stakeInvalidReason = !stakeInvalid ? "" : balance !== null && stake > balance
+    ? "Stake exceeds your balance."
+    : `Stake must be ${curr} ${MIN_STAKE.toLocaleString()}–${curr} ${MAX_STAKE.toLocaleString()}.`;
   const remove = (pick: Pick) => setPicks(picks.filter((p) => !(p.id === pick.id && p.market === pick.market && p.selection === pick.selection)));
 
   const place = async () => {
@@ -355,6 +362,7 @@ function InlineBetslip({ picks, setPicks, onPlace, curr, adminBookingCode, admin
         <button className="gold-button full ibs-place" onClick={place} disabled={placing || stakeInvalid} type="button">
           {placing ? "Placing…" : "Place Bet"} <Zap size={15} />
         </button>
+        {stakeInvalidReason && !placing && <small className="auth-notice">{stakeInvalidReason}</small>}
         {notice && <small className={notice.type === "error" ? "auth-notice" : "auth-notice ibs-success"}>{notice.text}</small>}
       </div>
     </div>
