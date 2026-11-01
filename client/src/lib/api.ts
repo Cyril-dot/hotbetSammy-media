@@ -978,6 +978,20 @@ export const deposits = {
   stripeIntent: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/stripe/intent", body),
 
+  /** POST /api/wallet/bank-deposits — MANUAL MoMo deposit submission
+      (restored 2026-11-01 as the Manual Payment tab alongside AkwaPay).
+      The player sends MoMo to the HotBet number on the Deposit page,
+      then submits the transfer details; the record lands PENDING for
+      admin review in the Bank + MoMo deposits queue, and approval
+      credits the wallet. */
+  manualSubmit: (body: { transferReference: string; ngnAmountSent: number; expectedNgnCredit: number; senderAccountName?: string; screenshotUrl?: string; userNote?: string }) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/bank-deposits", body),
+  /** GET /api/wallet/bank-deposits — the player's own manual submissions */
+  myManualDeposits: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<Record<string, unknown>>>>(
+      `/api/wallet/bank-deposits${qs({ page, size })}`
+    ),
+
   /** POST /api/wallet/deposit/bank */
   bankDeposit: (body: Record<string, unknown>) =>
     http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/bank", body),
