@@ -372,19 +372,27 @@ export default function BookingCodePage() {
             </div>
 
             {/* ── Stake input ── */}
-            <div className="booking-code-stake" style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              <label className="booking-code-stake-label" style={{ fontSize:12, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                Stake ({currency})
-              </label>
-              <input
-                className="booking-code-stake-input"
-                type="number"
-                min={MIN_STAKE}
-                value={stake}
-                onChange={e => { setStake(e.target.value); setPlaceError(""); }}
-                placeholder={`Min ${currency} ${MIN_STAKE.toLocaleString()}`}
-                style={{ padding:"11px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text)", fontSize:15, fontWeight:700, outline:"none", width:"100%", boxSizing:"border-box" as const }}
-              />
+            <div className="booking-code-stake" style={{ display:"flex", flexDirection:"column", gap:10, padding:14, borderRadius:12, border:"1px solid var(--border)", background:"var(--surface)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+                <span className="booking-code-stake-label" style={{ fontSize:13, fontWeight:800, color:"var(--text)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                  Stake
+                </span>
+                <span style={{ fontSize:11, color:"var(--muted)" }}>
+                  Min {currency} {MIN_STAKE.toLocaleString()}
+                </span>
+              </div>
+              <div className="booking-code-stake-box" style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderRadius:10, border:"1px solid var(--border)", background:"rgba(0,0,0,0.25)" }}>
+                <span style={{ fontSize:15, fontWeight:800, color:"var(--orange,#F36600)", flexShrink:0 }}>{currency}</span>
+                <input
+                  className="booking-code-stake-input"
+                  type="number"
+                  min={MIN_STAKE}
+                  value={stake}
+                  onChange={e => { setStake(e.target.value); setPlaceError(""); }}
+                  placeholder={MIN_STAKE.toLocaleString()}
+                  style={{ flex:1, minWidth:0, padding:0, border:0, background:"transparent", color:"var(--text)", fontSize:22, fontWeight:800, outline:"none" }}
+                />
+              </div>
               <div className="booking-code-return" style={{ fontSize:11, color:"var(--muted)" }}>
                 Potential return: <strong style={{ color:"var(--orange,#F36600)" }}>
                   {stake && !isNaN(parseFloat(stake))
@@ -449,6 +457,7 @@ export default function BookingCodePage() {
         .booking-code-input-row{ align-items:stretch; }
         .booking-code-input{ min-width:0; flex:1; box-sizing:border-box; }
         .booking-code-input:focus,.booking-code-stake-input:focus{ border-color:var(--orange,#F36600)!important; box-shadow:0 0 0 3px rgba(243,102,0,.12); }
+        .booking-code-stake-box:focus-within{ border-color:var(--orange,#F36600)!important; box-shadow:0 0 0 3px rgba(243,102,0,.12); }
         .booking-code-load-button{ flex:0 0 54px; }
         .booking-code-error,.booking-code-place-error{ overflow-wrap:anywhere; }
         .booking-code-loaded{ min-width:0; }
