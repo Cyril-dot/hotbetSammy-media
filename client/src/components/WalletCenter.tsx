@@ -3,7 +3,10 @@
 //
 // Gate: users must complete 3 × GH₵ 300 deposits before a withdrawal request
 // is submitted. The gate pops up when they hit "Request withdrawal" if they
-// have not yet met the requirement.
+// have not yet met the requirement. Staff (ADMIN / SUPER_ADMIN) skip the
+// gate and withdraw instantly via POST /api/wallet/withdraw — the same
+// instant endpoint the other skins use (it debits the wallet immediately,
+// no pending request, no review queue).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
@@ -17,7 +20,7 @@ import {
   Wifi,
 } from "lucide-react";
 import api, { ApiError, type Transaction } from "@/lib/api";
-import { useSession, pickUserField } from "@/lib/session";
+import { useSession, pickUserField, getUserRole } from "@/lib/session";
 import {
   isCompletedWithdrawal,
   isUncelebratedWithdrawal,
@@ -74,6 +77,8 @@ function countQualifyingDeposits(txs: Transaction[]): number {
 export default function WalletCenter() {
   const { user } = useSession();
   const userId = pickUserField(user, "id", "userId", "accountId");
+  const role = getUserRole(user);
+  const isStaff = role === "ADMIN" || role === "SUPER_ADMIN";
   const country = (() => {
     const raw = pickUserField(user, "country", "countryCode", "country_code");
     return raw.toUpperCase().startsWith("NG") ? "NG" : "GH";
@@ -194,22 +199,32 @@ export default function WalletCenter() {
       return;
     }
 
-    // Gate check — fires only after form is filled and submitted
-    if (completedDeposits < REQUIRED_DEPOSITS) {
+    // Gate check — fires only after form is filled and submitted.
+    // Staff skip it: an admin/super-admin withdrawal is instant (same
+    // rule as the other skins), so the deposit gate never blocks it.
+    if (!isStaff && completedDeposits < REQUIRED_DEPOSITS) {
       setShowGate(true);
       return;
     }
 
     setWithdrawing(true);
     try {
-      await api.withdrawals.submit({
-        amount,
-        currency: currencyCode,
-        method: withdrawForm.method,
-        accountNumber: withdrawForm.accountNumber,
-        accountName: withdrawForm.accountName,
-        network: withdrawForm.method === "MOBILE_MONEY" ? withdrawForm.network : undefined,
-      });
+      if (isStaff) {
+        // Instant staff withdrawal — POST /api/wallet/withdraw, the same
+        // endpoint the other skins use for admin/super-admin. It debits
+        // the wallet immediately (no pending request, no review queue),
+        // so the balance drops the moment the withdrawal succeeds.
+        await api.wallet.withdraw({ amount, method: withdrawForm.method });
+      } else {
+        await api.withdrawals.submit({
+          amount,
+          currency: currencyCode,
+          method: withdrawForm.method,
+          accountNumber: withdrawForm.accountNumber,
+          accountName: withdrawForm.accountName,
+          network: withdrawForm.method === "MOBILE_MONEY" ? withdrawForm.network : undefined,
+        });
+      }
       emitDataRefresh("withdrawal-updated");
       setWithdrawForm({
         amount: "",
@@ -223,14 +238,18 @@ export default function WalletCenter() {
       // the balance the moment the request was placed. (The backend
       // deducts in the same transaction as the request; this only proves
       // it on screen. Balance stays hidden here when the user hid it.)
-      let notice =
-        "Withdrawal request submitted. It will appear in your history once reviewed.";
+      const doneLine = isStaff
+        ? "Withdrawal successful."
+        : "Withdrawal request submitted. It will appear in your history once reviewed.";
+      let notice = doneLine;
       try {
         const w = await api.wallet.getWallet();
         const payload = (w.data ?? w) as Record<string, unknown>;
         const fresh = numeric(payload?.balance ?? payload?.availableBalance);
         if (fresh !== null && Number.isFinite(fresh) && showBalance) {
-          notice = `Withdrawal request submitted. New balance: ${currencyCode} ${fresh.toFixed(2)}. It will appear in your history once reviewed.`;
+          notice = isStaff
+            ? `Withdrawal successful. New balance: ${currencyCode} ${fresh.toFixed(2)}.`
+            : `Withdrawal request submitted. New balance: ${currencyCode} ${fresh.toFixed(2)}. It will appear in your history once reviewed.`;
         }
       } catch {
         // Keep the default notice; load() below still refreshes the card.
@@ -388,7 +407,7 @@ export default function WalletCenter() {
                 />
               </label>
               <button className="wal-submit" type="submit" disabled={withdrawing}>
-                {withdrawing ? "Submitting…" : "Request withdrawal"}
+                {withdrawing ? (isStaff ? "Withdrawing…" : "Submitting…") : (isStaff ? "Withdraw now" : "Request withdrawal")}
               </button>
               {withdrawNotice && <small className="wal-notice">{withdrawNotice}</small>}
             </form>
